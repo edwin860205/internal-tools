@@ -1874,11 +1874,7 @@ async function tryLoadFromCloud() {
   const data = await loadFromCloud();
   updateUploadUI();
   if (!data) return;
-  const localRaw = localStorage.getItem(STORAGE_KEY);
-  if (localRaw) {
-    const local = JSON.parse(localRaw);
-    if (local.savedAt && data.savedAt && local.savedAt >= data.savedAt) return;
-  }
+  // 雲端有資料就直接用，不做 savedAt 比對
   workOrders = data.workOrders || [];
   completedWO = data.completedWO || [];
   analysisDate = data.analysisDate || '';
