@@ -1,0 +1,3586 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>工單發料進度追蹤工具</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg: #fafaf9;
+    --surface: #ffffff;
+    --surface-2: #f5f5f4;
+    --surface-3: #efedea;
+    --border: #e7e5e4;
+    --border-strong: #d6d3d1;
+    --text: #1c1917;
+    --text-muted: #78716c;
+    --text-dim: #a8a29e;
+    --accent: #0f766e;
+    --accent-hover: #115e59;
+    --new-bg: #ecfdf5;
+    --new-border: #6ee7b7;
+    --new-text: #047857;
+    --date-bg: #eff6ff;
+    --date-border: #93c5fd;
+    --date-text: #1d4ed8;
+    --warn-bg: #fef2f2;
+    --warn-border: #fca5a5;
+    --warn-text: #b91c1c;
+    --done-bg: #f5f3ff;
+    --done-border: #c4b5fd;
+    --done-text: #6d28d9;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    font-family: -apple-system, BlinkMacSystemFont, "Microsoft JhengHei", "Segoe UI", sans-serif;
+    background: var(--bg); color: var(--text);
+    font-size: 14px; line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .container { max-width: 1280px; margin: 0 auto; padding: 24px 32px 80px; }
+
+  header { margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+  .title-area h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; }
+  .sub { color: var(--text-muted); font-size: 13px; margin-top: 4px; }
+  .reupload-btn {
+    padding: 8px 14px; background: var(--surface);
+    border: 1px solid var(--border-strong); border-radius: 6px;
+    font-size: 13px; font-weight: 600; cursor: pointer; color: var(--text);
+    display: inline-flex; align-items: center; gap: 6px;
+    transition: all 0.15s; flex-shrink: 0;
+  }
+  .reupload-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  .upload-zone {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 20px; margin-bottom: 24px;
+    box-shadow: var(--shadow-sm);
+  }
+  .upload-zone.hidden { display: none; }
+  .upload-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 12px; align-items: end; }
+
+  /* 上傳教學摺疊區 */
+  .upload-help {
+    margin-bottom: 16px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface-2);
+    overflow: hidden;
+  }
+  .upload-help summary {
+    cursor: pointer;
+    padding: 10px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    user-select: none;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background 0.15s;
+  }
+  .upload-help summary::-webkit-details-marker { display: none; }
+  .upload-help summary::before {
+    content: '▶';
+    font-size: 9px;
+    color: var(--text-muted);
+    transition: transform 0.2s;
+    display: inline-block;
+  }
+  .upload-help[open] summary::before { transform: rotate(90deg); }
+  .upload-help summary:hover { background: var(--surface-3); }
+  .upload-help .help-hint {
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--text-dim);
+    margin-left: auto;
+  }
+  .upload-help .help-hint::before { content: '點擊展開'; }
+  .upload-help[open] .help-hint::before { content: '點擊收起'; }
+  .upload-help .upload-help-body {
+    padding: 4px 18px 16px 18px;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .help-section { display: flex; flex-direction: column; gap: 12px; padding-top: 14px; }
+  .help-step {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    font-size: 13px;
+    line-height: 1.55;
+  }
+  .help-step .step-num {
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    margin-top: 1px;
+  }
+  .help-step b { color: var(--text); display: block; margin-bottom: 2px; }
+  .help-step .help-desc {
+    display: block;
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.6;
+  }
+  .help-step .help-hint-text {
+    color: var(--accent);
+    font-style: italic;
+  }
+  .help-tip {
+    margin-top: 14px;
+    padding: 10px 12px;
+    background: var(--new-bg);
+    border: 1px solid var(--new-border);
+    border-radius: 6px;
+    font-size: 12px;
+    color: var(--new-text);
+    line-height: 1.6;
+  }
+  .help-tip b { color: var(--text); }
+  .file-input-wrap label {
+    display: block; font-size: 12px; font-weight: 600;
+    color: var(--text-muted); margin-bottom: 6px;
+    text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .file-input-wrap label .opt {
+    font-weight: 400; text-transform: none; letter-spacing: 0;
+    color: var(--text-dim); margin-left: 6px;
+  }
+  .file-btn {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    width: 100%; padding: 10px 14px; background: var(--surface-2);
+    border: 1px dashed var(--border-strong); border-radius: 6px;
+    cursor: pointer; font-size: 13px; color: var(--text-muted);
+    transition: all 0.15s; overflow: hidden;
+  }
+  .file-btn:hover { border-color: var(--accent); color: var(--accent); background: #fff; }
+  .file-btn.has-file { border-style: solid; border-color: var(--accent); background: #fff; color: var(--text); }
+  .file-btn .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .file-btn .icon { flex-shrink: 0; opacity: 0.6; }
+  input[type="file"] { display: none; }
+  .analyze-btn {
+    padding: 10px 20px; background: var(--accent); color: #fff;
+    border: none; border-radius: 6px; font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: background 0.15s; white-space: nowrap;
+  }
+  .analyze-btn:hover { background: var(--accent-hover); }
+  .analyze-btn:disabled { background: var(--text-dim); cursor: not-allowed; }
+
+  .stats { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin-bottom: 24px; }
+  .stat {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 14px 16px;
+  }
+  .stat .label {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--text-muted); font-weight: 600;
+  }
+  .stat .value {
+    font-size: 24px; font-weight: 700; margin-top: 4px;
+    letter-spacing: -0.02em; font-variant-numeric: tabular-nums;
+  }
+  .stat.new .value { color: var(--new-text); }
+  .stat.date .value { color: var(--date-text); }
+  .stat.warn .value { color: var(--warn-text); }
+  .stat.done .value { color: var(--done-text); }
+
+  .toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+
+  /* === BI 戰情看板 === */
+  .bi-dashboard { margin-bottom: 24px; }
+  .bi-section-title {
+    font-size: 13px; font-weight: 700; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.06em;
+    margin: 18px 0 10px; display: flex; align-items: center; gap: 8px;
+  }
+  .bi-section-title::before {
+    content: ''; display: inline-block;
+    width: 3px; height: 14px;
+    background: var(--accent); border-radius: 2px;
+  }
+  .bi-grid { display: grid; gap: 12px; }
+  .bi-grid.cols-2 { grid-template-columns: 1fr 1fr; }
+  .bi-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+  .bi-grid.cols-7 { grid-template-columns: repeat(4, 1fr); }
+  @media (min-width: 1100px) {
+    .bi-grid.cols-7 { grid-template-columns: repeat(7, 1fr); }
+  }
+
+  .bi-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px; transition: all 0.2s;
+  }
+  .bi-card.has-warning { border-color: var(--warn-border); }
+  .bi-card-title {
+    font-size: 12px; font-weight: 600; color: var(--text);
+    margin-bottom: 4px; display: flex;
+    justify-content: space-between; align-items: center; gap: 8px;
+  }
+  .bi-card-tag {
+    font-size: 10px; font-weight: 700;
+    padding: 2px 6px; border-radius: 3px; letter-spacing: 0.04em;
+  }
+  .bi-card-tag.admin { background: #fef3c7; color: #92400e; }
+  .bi-card-tag.prod { background: #dbeafe; color: #1e40af; }
+  .bi-card-total {
+    font-size: 22px; font-weight: 700; color: var(--text);
+    letter-spacing: -0.02em; font-variant-numeric: tabular-nums;
+    margin: 4px 0 8px; line-height: 1;
+  }
+  .bi-card-total .unit {
+    font-size: 11px; color: var(--text-muted);
+    font-weight: 400; margin-left: 3px;
+  }
+
+  /* 圓餅圖 */
+  .bi-donut-wrap { display: flex; align-items: center; gap: 10px; }
+  .bi-donut { width: 64px; height: 64px; flex-shrink: 0; }
+  .bi-donut-legend {
+    flex: 1; display: flex; flex-direction: column;
+    gap: 3px; font-size: 11px; min-width: 0;
+  }
+  .bi-donut-legend .legend-item {
+    display: flex; align-items: center; gap: 5px;
+    font-variant-numeric: tabular-nums;
+  }
+  .bi-donut-legend .dot {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  }
+  .bi-donut-legend .label {
+    color: var(--text-muted); flex: 1;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .bi-donut-legend .num { color: var(--text); font-weight: 600; }
+
+  /* 橫向長條圖 */
+  .bi-bar-chart {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px 18px;
+  }
+  .bi-bar-row {
+    display: grid; grid-template-columns: 130px 1fr auto;
+    gap: 10px; align-items: center; padding: 6px 0; font-size: 12px;
+  }
+  .bi-bar-label {
+    color: var(--text); font-weight: 500;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .bi-bar-track {
+    background: var(--surface-2); border-radius: 4px;
+    height: 18px; overflow: hidden; position: relative;
+  }
+  .bi-bar-fill {
+    height: 100%; border-radius: 4px;
+    background: linear-gradient(90deg, #14b8a6, #0d9488);
+    transition: width 0.5s;
+  }
+  .bi-bar-fill.warn { background: linear-gradient(90deg, #f87171, #dc2626); }
+  .bi-bar-fill.new { background: linear-gradient(90deg, #34d399, #10b981); }
+  .bi-bar-fill.done { background: linear-gradient(90deg, #a78bfa, #7c3aed); }
+  .bi-bar-num {
+    color: var(--text); font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    min-width: 36px; text-align: right;
+  }
+
+  /* 廠區 × 月份矩陣 */
+  .bi-fm-row {
+    display: grid; grid-template-columns: 110px 1fr;
+    align-items: center; gap: 12px;
+    padding: 8px 0;
+    border-bottom: 1px dashed var(--border);
+  }
+  .bi-fm-row:last-child { border-bottom: none; }
+  .bi-fm-factory {
+    font-size: 12px; font-weight: 600; color: var(--text);
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .bi-fm-total {
+    font-size: 10px; font-weight: 500; color: var(--text-muted);
+  }
+  .bi-fm-cells {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(50px, 1fr));
+    gap: 6px;
+    align-items: end;
+  }
+  .bi-fm-cell {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 3px;
+    height: 60px; justify-content: flex-end;
+  }
+  .bi-fm-bar-track {
+    width: 100%; height: 44px;
+    display: flex; align-items: flex-end;
+    background: var(--surface-2);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .bi-fm-bar {
+    width: 100%;
+    border-radius: 3px 3px 0 0;
+    transition: height 0.4s;
+    min-height: 2px;
+  }
+  .bi-fm-num {
+    font-size: 10px; font-weight: 700; color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+  .bi-fm-month-label {
+    font-size: 11px; font-weight: 700;
+    color: var(--text-muted);
+    text-align: center;
+    padding-bottom: 4px;
+  }
+
+  /* === 手機版 BI === */
+  @media (max-width: 768px) {
+    .bi-grid.cols-2,
+    .bi-grid.cols-3,
+    .bi-grid.cols-7 { grid-template-columns: 1fr 1fr; }
+    .bi-bar-row { grid-template-columns: 90px 1fr auto; font-size: 11px; }
+    .bi-fm-row { grid-template-columns: 80px 1fr; gap: 6px; }
+    .bi-fm-cell { height: 50px; }
+    .bi-fm-bar-track { height: 36px; }
+    .bi-fm-num { font-size: 9px; }
+  }
+
+  /* Tab 切換 */
+  .tab-bar {
+    display: flex;
+    gap: 4px;
+    border-bottom: 2px solid var(--border);
+    margin-bottom: 18px;
+  }
+  .tab-btn {
+    padding: 10px 18px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: inherit;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+  .tab-pane { display: none; }
+  .tab-pane.active { display: block; }
+  .search-box {
+    flex: 1; min-width: 220px; padding: 8px 12px;
+    border: 1px solid var(--border-strong); border-radius: 6px;
+    font-size: 13px; font-family: inherit; background: var(--surface);
+    outline: none; transition: border-color 0.15s;
+  }
+  .search-box:focus { border-color: var(--accent); }
+  .month-select {
+    padding: 2px 26px 2px 9px;
+    border: 1px solid var(--border-strong); border-radius: 5px;
+    font-size: 11px; font-family: inherit; background: var(--surface);
+    outline: none; cursor: pointer; color: var(--text);
+    font-weight: 600;
+    height: 22px;
+    transition: all 0.15s;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M0 0l5 6 5-6z' fill='%23999'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 9px center;
+    min-width: 130px;
+  }
+  .month-select:hover { border-color: var(--accent); color: var(--accent); }
+  .month-select:focus { border-color: var(--accent); }
+  .month-select.active { background-color: var(--new-bg); color: var(--new-text); border-color: var(--new-border); }
+
+  /* 工具列裡的月份下拉:用大尺寸配合搜尋框 */
+  .month-select.toolbar-month {
+    padding: 8px 30px 8px 12px;
+    font-size: 13px;
+    height: auto;
+    min-width: 150px;
+    background-position: right 10px center;
+  }
+  .filter-pills { display: flex; gap: 6px; }
+  .pill {
+    padding: 6px 12px; background: var(--surface);
+    border: 1px solid var(--border-strong); border-radius: 999px;
+    font-size: 12px; cursor: pointer; color: var(--text-muted);
+    font-weight: 500; transition: all 0.15s;
+  }
+  .pill.active { background: var(--text); color: #fff; border-color: var(--text); }
+  .pill:hover:not(.active) { border-color: var(--text-muted); color: var(--text); }
+  .download-btn {
+    padding: 8px 14px; background: var(--surface);
+    border: 1px solid var(--border-strong); border-radius: 6px;
+    font-size: 12px; font-weight: 600; cursor: pointer; color: var(--text);
+    display: inline-flex; align-items: center; gap: 6px; transition: all 0.15s;
+  }
+  .download-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  .category {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; margin-bottom: 8px; overflow: hidden;
+  }
+  .category-header {
+    padding: 6px 18px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer; user-select: none;
+    background: var(--surface); transition: background 0.15s;
+    height: 36px; box-sizing: border-box;
+    min-width: 0;
+    flex-wrap: nowrap;
+  }
+  .category-header > .category-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .category-header:hover { background: var(--surface-2); }
+  .toggle-icon {
+    display: inline-flex; align-items: center; justify-content: center;
+    transition: transform 0.2s; color: var(--text-muted); font-size: 10px;
+  }
+  .category-header.open .toggle-icon { transform: rotate(90deg); }
+  .category-tag {
+    font-size: 11px; font-weight: 700; padding: 3px 8px;
+    border-radius: 4px; letter-spacing: 0.04em; text-align: center;
+  }
+  .tag-admin { background: #fef3c7; color: #92400e; }
+  .tag-prod { background: #dbeafe; color: #1e40af; }
+  .category-name { font-size: 14px; font-weight: 600; }
+
+  .num-badge {
+    display: inline-flex; align-items: center; gap: 3px;
+    font-size: 11px; padding: 1px 7px; border-radius: 4px;
+    font-weight: 600; min-width: 56px; justify-content: center;
+    font-variant-numeric: tabular-nums; line-height: 1.5;
+    height: 20px; box-sizing: border-box;
+  }
+  .num-badge .lbl { font-size: 10px; opacity: 0.75; font-weight: 500; line-height: 1; }
+  .num-badge.done { background: var(--done-bg); color: var(--done-text); border: 1px solid var(--done-border); }
+  .num-badge.new { background: var(--new-bg); color: var(--new-text); border: 1px solid var(--new-border); }
+  .num-badge.empty { background: transparent; border: 1px solid transparent; color: var(--text-dim); font-weight: 400; }
+  .total-count {
+    font-size: 13px; font-weight: 600; color: var(--text);
+    font-variant-numeric: tabular-nums; min-width: 56px; text-align: right;
+  }
+  .total-count .unit { font-size: 11px; color: var(--text-muted); font-weight: 400; margin-left: 2px; }
+
+  .copy-btn {
+    padding: 2px 9px; background: transparent;
+    border: 1px solid var(--border-strong); border-radius: 5px;
+    font-size: 11px; font-weight: 600; cursor: pointer;
+    color: var(--text-muted); transition: all 0.15s;
+    display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;
+    height: 22px; box-sizing: border-box;
+  }
+  .copy-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .copy-btn.copied { background: var(--new-text); color: #fff; border-color: var(--new-text); }
+
+  .category-body { max-height: 0; overflow: hidden; border-top: 0; padding: 0; margin: 0; }
+  .category.open .category-body { max-height: none; overflow: visible; border-top: 1px solid var(--border); }
+
+  .dept-group { border-bottom: 1px solid var(--border); margin: 0; padding: 0; }
+  .dept-group:last-child { border-bottom: none; }
+  .dept-header {
+    padding: 4px 18px 4px 40px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer; background: var(--surface-2); transition: background 0.15s;
+    height: 32px; box-sizing: border-box;
+    min-width: 0;
+    flex-wrap: nowrap;
+  }
+  .dept-header > .dept-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dept-header:hover { background: var(--surface-3); }
+  .dept-name { font-size: 13px; font-weight: 600; color: var(--text); margin: 0; }
+  .dept-body { max-height: 0; overflow: hidden; background: var(--surface); padding: 0; margin: 0; }
+  .dept-group.open .dept-body { max-height: none; overflow: visible; }
+
+  .owner-group { border-bottom: 1px solid var(--border); margin: 0; padding: 0; }
+  .owner-group:last-child { border-bottom: none; }
+  .owner-header {
+    padding: 3px 18px 3px 64px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer; background: #fcfbfa; transition: background 0.15s;
+    height: 30px; box-sizing: border-box;
+    min-width: 0;
+    flex-wrap: nowrap;
+  }
+  /* 當 owner-group 直接接在廠區下(skipDept = true)時,縮排小一點 */
+  .owner-group[data-indent="1"] > .owner-header { padding-left: 40px; background: var(--surface-2); }
+  .owner-header > .owner-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .owner-header:hover { background: var(--surface-2); }
+  .owner-name { font-size: 12px; font-weight: 500; color: var(--text); margin: 0; }
+  /* indent=1 時字體稍大一點(因為它扮演部門+工單類別的角色) */
+  .owner-group[data-indent="1"] > .owner-header > .owner-name { font-size: 13px; font-weight: 600; }
+  .owner-body { max-height: 0; overflow: hidden; background: var(--surface); padding: 0; margin: 0; }
+  .owner-group.open .owner-body { max-height: none; overflow: visible; }
+
+  /* 月份層(在工單類別與工單列之間)*/
+  .month-group { border-bottom: 1px solid var(--border); margin: 0; padding: 0; }
+  .month-group:last-child { border-bottom: none; }
+  .month-header {
+    padding: 3px 18px 3px 76px;
+    display: flex; align-items: center; gap: 10px;
+    cursor: pointer;
+    background: linear-gradient(to right, #f1f9fb 0%, var(--surface) 60%);
+    transition: background 0.15s;
+    height: 28px; box-sizing: border-box;
+    min-width: 0; flex-wrap: nowrap;
+    border-left: 3px solid var(--accent);
+  }
+  .month-header > .month-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .month-header:hover { background: linear-gradient(to right, #e6f3f5 0%, var(--surface-2) 60%); }
+  .month-name {
+    font-size: 11px; font-weight: 700; color: var(--accent);
+    margin: 0; letter-spacing: 0.02em;
+  }
+  .month-body { max-height: 0; overflow: hidden; background: var(--surface); padding: 0; margin: 0; }
+  .month-group.open .month-body { max-height: none; overflow: visible; }
+  /* 月份層裡面的 wo-row 縮排再深一點以表現階層 */
+  .month-body .wo-row { padding-left: 100px; }
+  .month-body .wo-detail { padding-left: 100px; }
+
+  /* 月份層裡的警示/注意徽章配色 */
+  .num-badge.warn-badge { background: var(--warn-bg); color: var(--warn-text); border: 1px solid var(--warn-border); }
+  .num-badge.attn-badge { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
+
+  .row {
+    display: grid; grid-template-columns: auto 1fr 200px 90px 90px;
+    align-items: center; gap: 10px;
+    padding: 6px 18px 6px 88px;
+    border-bottom: 1px solid var(--border); font-size: 13px;
+  }
+  .row:last-child { border-bottom: none; }
+  .row:hover { background: #fcfcfb; }
+  .row .badges { display: flex; gap: 4px; min-width: 0; }
+  .row .doc-no {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12px; font-weight: 600; cursor: pointer; color: var(--text);
+    border-bottom: 1px dotted transparent; transition: border-color 0.15s;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .row .doc-no:hover { border-bottom-color: var(--accent); color: var(--accent); }
+  .row .doc-no.copied { color: var(--new-text); }
+  .row .doc-name { color: var(--text-muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .doc-owner {
+    color: var(--text); font-size: 12px; font-weight: 500;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .row .doc-date { color: var(--text-dim); font-size: 11px; font-variant-numeric: tabular-nums; text-align: right; }
+  .row.warn { background: linear-gradient(to right, var(--warn-bg) 0%, transparent 30%); }
+
+  .badge {
+    font-size: 10px; font-weight: 700; padding: 2px 5px;
+    border-radius: 3px; letter-spacing: 0.03em;
+  }
+  .badge.new { background: var(--new-bg); color: var(--new-text); }
+  .badge.date { background: var(--date-bg); color: var(--date-text); }
+  .badge.warn { background: var(--warn-bg); color: var(--warn-text); }
+
+  .empty { text-align: center; padding: 80px 20px; color: var(--text-muted); }
+  .empty .icon-big { font-size: 36px; margin-bottom: 12px; opacity: 0.4; }
+  .empty .title { font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+  .empty .desc { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+
+  .toast {
+    position: fixed; bottom: 24px; left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--text); color: #fff;
+    padding: 10px 18px; border-radius: 6px;
+    font-size: 13px; font-weight: 500;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    opacity: 0; transition: all 0.2s;
+    pointer-events: none; z-index: 1000;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* 密碼彈窗 */
+  .modal-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(28, 25, 23, 0.5);
+    backdrop-filter: blur(4px);
+    display: none; align-items: center; justify-content: center;
+    z-index: 2000; padding: 20px;
+  }
+  .modal-backdrop.show { display: flex; }
+  .modal {
+    background: var(--surface);
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+    padding: 28px;
+    width: 100%; max-width: 380px;
+    animation: modalIn 0.18s ease-out;
+  }
+  @keyframes modalIn {
+    from { opacity: 0; transform: scale(0.94); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  .modal-title {
+    font-size: 17px; font-weight: 700;
+    color: var(--text); margin-bottom: 6px;
+    letter-spacing: -0.01em;
+  }
+  .modal-desc {
+    font-size: 13px; color: var(--text-muted);
+    margin-bottom: 18px;
+  }
+  .pwd-input {
+    width: 100%; padding: 11px 14px;
+    border: 1.5px solid var(--border-strong);
+    border-radius: 8px;
+    font-size: 15px; font-family: inherit;
+    background: var(--surface);
+    outline: none;
+    transition: border-color 0.15s;
+    letter-spacing: 0.1em;
+  }
+  .pwd-input:focus { border-color: var(--accent); }
+  .pwd-input.error { border-color: var(--warn-text); }
+  .pwd-error {
+    font-size: 12px; color: var(--warn-text);
+    margin-top: 6px; min-height: 18px;
+    font-weight: 500;
+  }
+  .modal-buttons {
+    display: flex; gap: 8px; justify-content: flex-end;
+    margin-top: 14px;
+  }
+  .btn-cancel, .btn-confirm {
+    padding: 8px 18px;
+    border-radius: 6px;
+    font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: all 0.15s;
+    font-family: inherit;
+  }
+  .btn-cancel {
+    background: var(--surface);
+    color: var(--text-muted);
+    border: 1px solid var(--border-strong);
+  }
+  .btn-cancel:hover { color: var(--text); border-color: var(--text-muted); }
+  .btn-confirm {
+    background: var(--accent);
+    color: #fff;
+    border: 1px solid var(--accent);
+  }
+  .btn-confirm:hover { background: var(--accent-hover); }
+
+  .section-title {
+    font-size: 12px; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--text-muted);
+    font-weight: 700; margin: 24px 0 10px; padding-left: 4px;
+  }
+
+  .done-section {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; margin-bottom: 12px; overflow: hidden;
+  }
+  .done-header {
+    padding: 14px 18px; display: flex; align-items: center; gap: 12px;
+    cursor: pointer; background: var(--surface); transition: background 0.15s;
+  }
+  .done-header:hover { background: var(--surface-2); }
+  .done-section.open .done-header .toggle-icon { transform: rotate(90deg); }
+  .done-tag {
+    font-size: 11px; font-weight: 700; padding: 3px 10px;
+    border-radius: 4px; background: var(--done-bg);
+    color: var(--done-text); border: 1px solid var(--done-border);
+  }
+  .done-title { flex: 1; font-size: 14px; font-weight: 600; }
+  .done-body { display: none; border-top: 1px solid var(--border); }
+  .done-section.open .done-body { display: block; }
+  .done-row {
+    display: grid; grid-template-columns: auto 1fr 180px 200px 110px;
+    align-items: center; gap: 12px; padding: 9px 18px;
+    border-bottom: 1px solid var(--border); font-size: 13px;
+  }
+  .done-row:last-child { border-bottom: none; }
+  .done-row .doc-no {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12px; font-weight: 600; color: var(--text); cursor: pointer;
+  }
+
+  @media (max-width: 768px) {
+    .container { padding: 16px; }
+    .upload-row { grid-template-columns: 1fr; }
+    .stats { grid-template-columns: repeat(2, 1fr); }
+    .row { grid-template-columns: 1fr 80px; gap: 6px; padding-left: 50px; }
+    .row .doc-name, .row .doc-date, .row .badges { display: none; }
+    .category-header { grid-template-columns: 18px 1fr auto auto; }
+    .category-header .category-tag { display: none; }
+  }
+</style>
+
+<style id="extra-style">
+  /* 工單專用 — 進度條 */
+  .progress-mini {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-variant-numeric: tabular-nums;
+  }
+  .progress-bar {
+    width: 60px; height: 6px; background: var(--surface-2);
+    border-radius: 3px; overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%; border-radius: 3px;
+    background: linear-gradient(90deg, #14b8a6, #0d9488);
+    transition: width 0.4s;
+  }
+  .progress-fill.low { background: linear-gradient(90deg, #f87171, #dc2626); }
+  .progress-fill.mid { background: linear-gradient(90deg, #fbbf24, #f59e0b); }
+  .progress-text {
+    font-size: 11px; color: var(--text-muted); font-weight: 600;
+    min-width: 32px; text-align: right;
+  }
+  .progress-text.low { color: var(--warn-text); }
+  .progress-text.mid { color: #b45309; }
+  .progress-text.high { color: #059669; }
+
+  /* 工單列(第 3 層) */
+  .wo-row {
+    display: grid;
+    grid-template-columns: auto 200px 1fr 110px 120px 110px 90px;
+    align-items: center; gap: 10px;
+    padding: 6px 18px 6px 88px;
+    border-bottom: 1px solid var(--border); font-size: 13px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .wo-row:hover { background: #fcfcfb; }
+  .wo-row.warn { background: linear-gradient(to right, var(--warn-bg) 0%, transparent 30%); }
+  .wo-row.attn { background: linear-gradient(to right, #fef3c7 0%, transparent 30%); }
+  .wo-row.expanded { background: var(--surface-2); border-bottom: 1px solid var(--border-strong); }
+  .wo-row .badges { display: flex; gap: 4px; min-width: 0; flex-wrap: nowrap; }
+  .wo-row .wo-no {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12px; font-weight: 600; color: var(--text);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .wo-row .wo-name {
+    color: var(--text-muted); font-size: 12px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .wo-row .wo-qty {
+    color: var(--text); font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .wo-row .wo-qty .label { color: var(--text-dim); font-size: 10px; margin-right: 3px; }
+  .wo-row .wo-date {
+    color: var(--text-dim); font-size: 11px;
+    font-variant-numeric: tabular-nums; text-align: right;
+  }
+  .wo-row .wo-toggle {
+    color: var(--text-muted); font-size: 11px;
+    transition: transform 0.2s;
+  }
+  .wo-row.expanded .wo-toggle { transform: rotate(90deg); }
+
+  /* 料項展開區(第 4 層) */
+  .wo-detail {
+    display: none;
+    background: #faf9f7;
+    border-bottom: 1px solid var(--border);
+    padding: 8px 18px 12px 88px;
+  }
+  .wo-row.expanded + .wo-detail { display: block; }
+
+  .mat-cat-group {
+    margin-bottom: 4px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .mat-cat-header {
+    padding: 6px 12px;
+    background: var(--surface-2);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+  }
+  .mat-cat-name { letter-spacing: 0.02em; }
+  .mat-cat-stats {
+    color: var(--text-muted); font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+  .mat-row {
+    display: grid;
+    grid-template-columns: 200px 1fr 90px 90px 90px 110px;
+    gap: 10px;
+    padding: 5px 12px;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    align-items: center;
+  }
+  .mat-row .mat-no {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-weight: 600;
+    color: var(--text);
+    cursor: pointer;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .mat-row .mat-no:hover { color: var(--accent); }
+  .mat-row .mat-no.copied { color: var(--new-text); }
+  .mat-row .mat-name {
+    color: var(--text-muted); font-size: 11px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .mat-row .mat-num {
+    color: var(--text); font-variant-numeric: tabular-nums;
+    text-align: right; font-size: 11px;
+  }
+  .mat-row .mat-num .label {
+    color: var(--text-dim); font-size: 10px;
+    display: block; line-height: 1;
+  }
+  .mat-row .mat-num.diff-bad { color: var(--warn-text); font-weight: 600; }
+
+  /* 警示徽章 — 黃 / 紅 */
+  .badge.attn { background: #fef3c7; color: #92400e; }
+  .badge.warn-strong { background: var(--warn-bg); color: var(--warn-text); }
+  .badge.done { background: var(--done-bg); color: var(--done-text); }
+
+  /* 缺料徽章 */
+  .badge.shortage-attn {
+    background: #ffedd5; color: #9a3412;
+    border: 1px solid #fdba74;
+  }
+  .badge.shortage-warn {
+    background: #fee2e2; color: #991b1b;
+    border: 1px solid #fca5a5;
+    font-weight: 700;
+  }
+
+  /* 料項列缺料背景 */
+  .mat-row.shortage-attn-row {
+    background: linear-gradient(to right, #fff7ed 0%, transparent 60%);
+    border-left: 3px solid #fb923c;
+  }
+  .mat-row.shortage-warn-row {
+    background: linear-gradient(to right, #fef2f2 0%, transparent 60%);
+    border-left: 3px solid #dc2626;
+  }
+  .shortage-tag {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 6px;
+    background: #fee2e2;
+    color: #991b1b;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+  }
+  .shortage-attn-row .shortage-tag {
+    background: #ffedd5; color: #9a3412;
+  }
+
+  /* 缺料明細表(BI) */
+  .shortage-table {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .shortage-row {
+    display: grid;
+    grid-template-columns: 24px 130px 90px 130px 1fr 160px 60px 130px;
+    gap: 8px;
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+    align-items: center;
+  }
+  .shortage-row:last-child { border-bottom: none; }
+  .shortage-row.shortage-header {
+    background: var(--surface-2);
+    font-weight: 700;
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .shortage-row.shortage-warn-row {
+    background: linear-gradient(to right, #fef2f2 0%, transparent 80%);
+    border-left: 3px solid #dc2626;
+  }
+  .shortage-row.shortage-attn-row {
+    background: linear-gradient(to right, #fff7ed 0%, transparent 80%);
+    border-left: 3px solid #fb923c;
+  }
+  .shortage-row .sh-level { font-size: 13px; }
+  .shortage-row .sh-wo {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-weight: 600; cursor: pointer; color: var(--text);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .shortage-row .sh-wo:hover { color: var(--accent); }
+  .shortage-row .sh-factory { color: var(--text-muted); font-size: 11px; }
+  .shortage-row .sh-mat-no {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-weight: 600; cursor: pointer; color: var(--text);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .shortage-row .sh-mat-no:hover { color: var(--accent); }
+  .shortage-row .sh-mat-name {
+    color: var(--text-muted); font-size: 11px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .shortage-row .sh-progress { font-size: 11px; }
+  .shortage-row .sh-gap {
+    font-weight: 700; color: var(--warn-text);
+    text-align: right; font-variant-numeric: tabular-nums;
+  }
+  .shortage-row .sh-refill {
+    color: var(--text); font-size: 11px;
+    font-variant-numeric: tabular-nums;
+  }
+  .shortage-row .sh-refill strong { color: #c2410c; font-size: 12px; }
+  @media (max-width: 768px) {
+    .shortage-row { grid-template-columns: 20px 110px 1fr 80px; gap: 6px; font-size: 11px; }
+    .shortage-row .sh-factory, .shortage-row .sh-mat-name, .shortage-row .sh-progress { display: none; }
+  }
+
+  /* 完工區塊 */
+  .done-row {
+    display: grid !important;
+    grid-template-columns: auto 200px 1fr 130px 110px !important;
+    gap: 12px;
+    padding: 9px 18px;
+    border-bottom: 1px solid var(--border); font-size: 13px;
+    align-items: center;
+  }
+
+  /* 階層 header 欄位 grid 微調 — 沿用未確認版本但允許多放一個進度欄 */
+  @media (max-width: 768px) {
+    .wo-row { grid-template-columns: auto 1fr 80px; padding-left: 50px; gap: 6px; }
+    .wo-row .wo-name, .wo-row .wo-qty, .wo-row .wo-date { display: none; }
+    .wo-detail { padding-left: 50px; }
+    .mat-row { grid-template-columns: 1fr 80px; }
+    .mat-row .mat-name { display: none; }
+    .mat-row .mat-num.has { display: block; }
+    .mat-row .mat-num.hide-sm { display: none; }
+  }
+</style>
+
+<body>
+<div class="container">
+  <header>
+    <div class="title-area">
+      <h1>工單發料進度追蹤 <span style="font-size:11px;color:var(--text-dim);font-weight:400;letter-spacing:0;">v2.0</span></h1>
+      <p class="sub" id="subtitle" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <span id="subtitleText">尚未上傳資料</span>
+        <select class="month-select" id="monthSelect" style="display:none;">
+          <option value="all">📅 全部月份</option>
+        </select>
+        <button id="legendBtn" type="button" style="background:transparent;border:1px solid var(--border-strong);border-radius:5px;padding:2px 9px;font-size:11px;color:var(--text-muted);cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:4px;height:22px;">📖 圖示說明</button>
+      </p>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <span id="syncStatus" style="font-size:11px;padding:3px 10px;border-radius:12px;background:#f1f5f9;color:#64748b;border:1px solid #e2e8f0;cursor:pointer;" title="點擊設定雲端同步" onclick="openSyncSettings()">☁️ 未設定雲端</span>
+      <button class="reupload-btn" id="toggleUpload" style="display:none;">🔄 重新上傳分析</button>
+    </div>
+  </header>
+
+  <!-- 雲端同步設定彈窗 -->
+  <div class="modal-backdrop" id="syncModal" style="display:none;">
+    <div class="modal" style="max-width:520px;">
+      <div class="modal-title">☁️ 雲端同步設定</div>
+      <div class="modal-desc">填入 Google Apps Script 部署後的網址，即可讓所有人看到同一份資料。</div>
+      <div style="margin:12px 0 6px;font-size:12px;font-weight:600;color:var(--text-muted);">Apps Script 網址</div>
+      <input type="text" id="syncUrlInput" style="width:100%;padding:8px 10px;border:1px solid var(--border-strong);border-radius:6px;font-size:12px;font-family:monospace;" placeholder="https://script.google.com/macros/s/xxxxx/exec">
+      <div style="margin:12px 0 6px;font-size:12px;font-weight:600;color:var(--text-muted);">API 密碼</div>
+      <input type="password" id="syncSecretInput" style="width:100%;padding:8px 10px;border:1px solid var(--border-strong);border-radius:6px;font-size:12px;" placeholder="與 Apps Script 中設定的 API_SECRET 相同">
+      <div id="syncTestResult" style="margin-top:10px;font-size:12px;min-height:20px;"></div>
+      <div class="modal-buttons" style="margin-top:16px;">
+        <button class="btn-cancel" onclick="closeSyncSettings()">取消</button>
+        <button class="btn-confirm" style="background:#0f766e;" onclick="testAndSaveSyncSettings()">測試並儲存</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="upload-zone" id="uploadZone">
+    <details class="upload-help">
+      <summary>📖 上傳教學 <span class="help-hint"></span></summary>
+      <div class="upload-help-body">
+        <div class="help-section">
+          <div class="help-step">
+            <span class="step-num">1</span>
+            <div>
+              <b>從 ERP 匯出最新「工單已入庫未領料明細表」</b>
+              <span class="help-desc">登入 ERP 系統 → 找到「工單已入庫未領料明細表(全部)」 → 匯出成 Excel(.xlsx)。檔名隨意,例如「2月後工單發料進度表.xlsx」。</span>
+            </div>
+          </div>
+          <div class="help-step">
+            <span class="step-num">2</span>
+            <div>
+              <b>準備上次的「累積追蹤檔」</b>
+              <span class="help-desc">這是上次分析後從本工具下載的檔案,檔名類似「工單發料進度_累積追蹤檔_2026-04-30.xlsx」。<br><span class="help-hint-text">第一次使用本工具時可以跳過這步,直接傳 ERP 檔即可。</span></span>
+            </div>
+          </div>
+          <div class="help-step">
+            <span class="step-num">3</span>
+            <div>
+              <b>分別上傳到下方兩個欄位</b>
+              <span class="help-desc">① 欄位放 ERP 匯出檔(必填)<br>② 欄位放上次的累積追蹤檔(第一次免填)</span>
+            </div>
+          </div>
+          <div class="help-step">
+            <span class="step-num">4</span>
+            <div>
+              <b>點「開始分析」</b>
+              <span class="help-desc">系統會比對兩份檔案,自動標記:<br>🆕 新工單 / ✅ 完工 / 🟡 注意 / 🔴 警示</span>
+            </div>
+          </div>
+          <div class="help-step">
+            <span class="step-num">5</span>
+            <div>
+              <b>分析完成後,記得下載新的累積追蹤檔</b>
+              <span class="help-desc">點右上角「⬇ 下載累積追蹤檔」,把新檔存到電腦,蓋掉舊檔。下次分析時上傳這個新檔即可。</span>
+            </div>
+          </div>
+        </div>
+        <div class="help-tip">
+          💡 <b>提醒:</b> ERP 檔每次匯出都是新的,但累積追蹤檔需要每週覆蓋更新。建議固定放在電腦的某個資料夾(如桌面或公司共享資料夾),避免找不到。
+        </div>
+      </div>
+    </details>
+    <div class="upload-row">
+      <div class="file-input-wrap">
+        <label>① ERP 最新匯出檔 <span class="opt">必填</span></label>
+        <label class="file-btn" id="erpBtn">
+          <span class="name" id="erpName">點擊選擇檔案 .xlsx</span>
+          <span class="icon">📎</span>
+          <input type="file" id="erpFile" accept=".xlsx,.xls">
+        </label>
+      </div>
+      <div class="file-input-wrap">
+      <div class="file-input-wrap" id="trackFileWrap">
+        <label>② 上次的累積追蹤檔 <span class="opt">第一次使用免填</span></label>
+        <label class="file-btn" id="trackBtn">
+          <span class="name" id="trackName">點擊選擇檔案 .xlsx</span>
+          <span class="icon">📎</span>
+          <input type="file" id="trackFile" accept=".xlsx,.xls">
+        </label>
+      </div>
+      <div id="cloudTrackNotice" style="display:none;align-items:center;gap:8px;padding:10px 14px;background:#ecfdf5;border:1px solid #6ee7b7;border-radius:8px;font-size:12px;color:#047857;">
+        ☁️ <span>已連接雲端，歷史資料自動載入，不需要上傳累積追蹤檔</span>
+      </div>
+      <button class="analyze-btn" id="analyzeBtn" disabled>開始分析</button>
+    </div>
+  </div>
+
+  <div id="result" style="display:none;">
+    <div class="stats" id="stats"></div>
+
+    <!-- Tab 切換列 -->
+    <div class="tab-bar">
+      <button class="tab-btn active" data-tab="detail" onclick="window.__switchTab&&window.__switchTab('detail')">📋 明細列表</button>
+      <button class="tab-btn" data-tab="bi" onclick="window.__switchTab&&window.__switchTab('bi')">📊 戰情看板</button>
+    </div>
+
+    <!-- 明細頁面 -->
+    <div class="tab-pane active" id="tabDetail">
+      <div class="toolbar">
+        <input type="text" class="search-box" id="search" placeholder="搜尋工單號 / 廠區 / 生管 / 品名...">
+        <select class="month-select toolbar-month" id="monthSelectToolbar">
+          <option value="all">📅 全部月份</option>
+        </select>
+        <div class="filter-pills">
+          <span class="pill active" data-filter="all">全部</span>
+          <span class="pill" data-filter="new">🆕 新工單</span>
+          <span class="pill" data-filter="attn">🟡 注意</span>
+          <span class="pill" data-filter="warn">🔴 警示</span>
+          <span class="pill" data-filter="shortage">⚠️ 缺料</span>
+        </div>
+        <button class="download-btn" id="downloadMonthReportBtn" style="border-color:#0f766e;color:#0f766e;">📊 月份彙總報告</button>
+        <button class="download-btn" id="exportReadonlyBtn" style="border-color:var(--accent);color:var(--accent);">📤 匯出唯讀版 HTML</button>
+        <button class="download-btn" id="exportMobileBtn" style="border-color:#7c3aed;color:#7c3aed;">📱 匯出手機唯讀版</button>
+      </div>
+
+      <div id="doneSection"></div>
+
+      <div id="categoriesList"></div>
+    </div>
+
+    <!-- BI 看板頁面 -->
+    <div class="tab-pane" id="tabBI">
+      <div class="bi-dashboard" id="biDashboard"></div>
+    </div>
+  </div>
+
+  <div id="welcome" class="empty" style="display:none;">
+    <div class="icon-big">📋</div>
+    <div class="title">歡迎使用工單發料進度追蹤工具</div>
+    <div class="desc">請在上方上傳 ERP 匯出檔開始追蹤</div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- 密碼彈窗 -->
+<div class="modal-backdrop" id="pwdModal">
+  <div class="modal">
+    <div class="modal-title">🔒 需要密碼</div>
+    <div class="modal-desc">請輸入密碼以開啟上傳分析功能</div>
+    <input type="password" id="pwdInput" class="pwd-input" placeholder="請輸入密碼" autocomplete="off">
+    <div id="pwdError" class="pwd-error"></div>
+    <div class="modal-buttons">
+      <button class="btn-cancel" id="pwdCancel">取消</button>
+      <button class="btn-confirm" id="pwdConfirm">確認</button>
+    </div>
+  </div>
+</div>
+
+<!-- 圖示說明彈窗 -->
+<div class="modal-backdrop" id="legendModal">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-title">📖 圖示說明</div>
+    <div class="modal-desc">每個圖示代表不同維度的判定,組合起來可以快速判斷工單狀態</div>
+
+    <div style="display:flex;flex-direction:column;gap:14px;margin-top:8px;">
+      <div style="display:flex;gap:12px;padding:10px 12px;background:var(--new-bg);border:1px solid var(--new-border);border-radius:6px;">
+        <div style="flex-shrink:0;font-weight:700;color:var(--new-text);font-size:13px;min-width:62px;">🆕 新工單</div>
+        <div style="font-size:12px;color:var(--text);line-height:1.55;">
+          <b>追蹤系統視角</b> — 這次 ERP 有、上次累積追蹤檔沒有<br>
+          <span style="color:var(--text-muted);">代表「這張工單是這週才開立的」,跟單據實際開立日無關。</span>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:12px;padding:10px 12px;background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;">
+        <div style="flex-shrink:0;font-weight:700;color:#92400e;font-size:13px;min-width:62px;">🟡 注意</div>
+        <div style="font-size:12px;color:var(--text);line-height:1.55;">
+          <b>進度落後初級</b> — 工單開立 14 天以上 且 入庫進度 (K/J) &lt; 80%<br>
+          <span style="color:var(--text-muted);">代表「這張工單卡住了一段時間,該注意」,還沒到緊急但要追了。</span>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:12px;padding:10px 12px;background:var(--warn-bg);border:1px solid var(--warn-border);border-radius:6px;">
+        <div style="flex-shrink:0;font-weight:700;color:var(--warn-text);font-size:13px;min-width:62px;">🔴 警示</div>
+        <div style="font-size:12px;color:var(--text);line-height:1.55;">
+          <b>進度落後嚴重</b> — 工單開立 30 天以上 且 入庫進度 (K/J) &lt; 80%<br>
+          <span style="color:var(--text-muted);">代表「這張工單拖了很久還沒完成」,優先處理。</span>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:12px;padding:10px 12px;background:var(--done-bg);border:1px solid var(--done-border);border-radius:6px;">
+        <div style="flex-shrink:0;font-weight:700;color:var(--done-text);font-size:13px;min-width:62px;">✅ 完工</div>
+        <div style="font-size:12px;color:var(--text);line-height:1.55;">
+          <b>本週完成</b> — 上次累積檔有、這次 ERP 沒有<br>
+          <span style="color:var(--text-muted);">代表「這張工單在 ERP 中消失了,應該已經全部入庫+發料完成」,只記錄一次。</span>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:12px;padding:10px 12px;background:#fef2f2;border:1px solid #fca5a5;border-radius:6px;">
+        <div style="flex-shrink:0;font-weight:700;color:#991b1b;font-size:13px;min-width:62px;">⚠️ 缺料</div>
+        <div style="font-size:12px;color:var(--text);line-height:1.55;">
+          <b>料項補發提示</b> — 工單入庫進度 ≥ 80% 但某些料項發料明顯落後<br>
+          <span style="color:var(--text-muted);">🟡 落後 10-30% / 🔴 落後 30%+。代表工單已快做完但有料還沒補發,要先補才能正確結案。BI 看板有完整補發清單,或從累積追蹤檔的「需補發料項」分頁看。</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:14px;padding:10px 12px;background:var(--surface-2);border-radius:6px;font-size:11px;color:var(--text-muted);line-height:1.6;">
+      <b style="color:var(--text);">💡 進度判讀:</b><br>
+      • <b>入庫進度 K/J</b> = 已入庫合格量 / 生產數量(看工單最終產出多少成品)<br>
+      • <b>發料進度 S/T</b> = 已發數量 / 應發數量(看每項材料倉庫發出去多少)<br>
+      入庫進度才是判斷工單真正完成度的關鍵,發料是過程指標。<br>
+      <b style="color:var(--text);">當入庫進度高、料項發料卻落後</b>就是缺料 — 必須補發才能正確結案。
+    </div>
+
+    <div class="modal-buttons">
+      <button class="btn-confirm" id="legendClose">了解</button>
+    </div>
+  </div>
+</div>
+
+
+<script>
+// =============================================================================
+// 工單發料進度追蹤工具 — 主腳本 v1.1 (依規格 V2)
+// =============================================================================
+
+const STORAGE_KEY = 'work_order_tracker_v1';
+const SYNC_URL_KEY = 'workorder_sync_url';
+const SYNC_SECRET_KEY = 'workorder_sync_secret';
+const TOOL_ID = 'workorder';
+
+// ===== 雲端同步 =====
+function getSyncConfig() {
+  try { return { url: localStorage.getItem(SYNC_URL_KEY) || '', secret: localStorage.getItem(SYNC_SECRET_KEY) || '' }; }
+  catch(e) { return { url: '', secret: '' }; }
+}
+
+function updateSyncStatusUI(state, msg) {
+  const el = document.getElementById('syncStatus');
+  if (!el) return;
+  const map = {
+    none:    { icon: '☁️', label: '未設定雲端', bg: '#f1f5f9', color: '#64748b', border: '#e2e8f0' },
+    syncing: { icon: '🔄', label: '同步中…',   bg: '#eff6ff', color: '#1d4ed8', border: '#93c5fd' },
+    ok:      { icon: '✅', label: msg || '已同步', bg: '#ecfdf5', color: '#047857', border: '#6ee7b7' },
+    error:   { icon: '⚠️', label: msg || '同步失敗', bg: '#fef2f2', color: '#b91c1c', border: '#fca5a5' },
+    offline: { icon: '📴', label: '離線模式',   bg: '#fefce8', color: '#92400e', border: '#fde68a' },
+  };
+  const s = map[state] || map.none;
+  el.textContent = s.icon + ' ' + s.label;
+  el.style.background = s.bg; el.style.color = s.color; el.style.border = '1px solid ' + s.border;
+}
+
+async function saveToCloud(payload) {
+  const cfg = getSyncConfig();
+  if (!cfg.url) return false;
+  try {
+    updateSyncStatusUI('syncing');
+    const res = await fetch(cfg.url, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ secret: cfg.secret, tool: TOOL_ID, payload }) });
+    const json = await res.json();
+    if (json.ok) { updateSyncStatusUI('ok', '已同步 ' + (payload.analysisDate || '')); return true; }
+    updateSyncStatusUI('error', json.error || '伺服器錯誤'); return false;
+  } catch(e) { updateSyncStatusUI('offline', '連線失敗'); return false; }
+}
+
+async function loadFromCloud() {
+  const cfg = getSyncConfig();
+  if (!cfg.url) return null;
+  try {
+    updateSyncStatusUI('syncing');
+    const url = cfg.url + '?tool=' + TOOL_ID + '&secret=' + encodeURIComponent(cfg.secret);
+    const res = await fetch(url);
+    const json = await res.json();
+    if (json.ok && json.data) { updateSyncStatusUI('ok', '已載入 ' + (json.data.analysisDate || '')); return json.data; }
+    updateSyncStatusUI(cfg.url ? 'ok' : 'none', '尚無雲端資料'); return null;
+  } catch(e) { updateSyncStatusUI('offline', '離線，使用本機資料'); return null; }
+}
+
+function openSyncSettings() {
+  const cfg = getSyncConfig();
+  document.getElementById('syncUrlInput').value = cfg.url;
+  document.getElementById('syncSecretInput').value = cfg.secret;
+  document.getElementById('syncTestResult').textContent = '';
+  document.getElementById('syncModal').style.display = 'flex';
+}
+function closeSyncSettings() { document.getElementById('syncModal').style.display = 'none'; }
+
+async function testAndSaveSyncSettings() {
+  const url = document.getElementById('syncUrlInput').value.trim();
+  const secret = document.getElementById('syncSecretInput').value.trim();
+  const resultEl2 = document.getElementById('syncTestResult');
+  if (!url) { resultEl2.style.color = '#b91c1c'; resultEl2.textContent = '請填入網址'; return; }
+  resultEl2.style.color = '#1d4ed8'; resultEl2.textContent = '測試中…';
+  try {
+    const testUrl = url + '?tool=' + TOOL_ID + '&secret=' + encodeURIComponent(secret);
+    const res = await fetch(testUrl);
+    const json = await res.json();
+    if (json.ok !== undefined) {
+      try { localStorage.setItem(SYNC_URL_KEY, url); localStorage.setItem(SYNC_SECRET_KEY, secret); } catch(e) {}
+      resultEl2.style.color = '#047857'; resultEl2.textContent = '✅ 連線成功！設定已儲存。';
+      updateSyncStatusUI('ok', '雲端已連線');
+      updateUploadUI();
+      setTimeout(closeSyncSettings, 1200);
+    } else { resultEl2.style.color = '#b91c1c'; resultEl2.textContent = '❌ ' + (json.error || '連線失敗'); }
+  } catch(e) { resultEl2.style.color = '#b91c1c'; resultEl2.textContent = '❌ 無法連線：' + e.message; }
+}
+
+// ===== 廠區/部門/工單類別對照表(依規格 V2)=====
+// 依工單號第 3-7 碼(例:WHAFA11-260202002 → AFA11)對應
+// 「(不顯示第三層直接展開第四層)」標記表示該廠區下不需要顯示部門那層
+const WO_PREFIX_MAPPING = {
+  // 一廠(顯示完整三層:廠區 → 部門 → 工單類別)
+  'AFE11': { factory: '一廠',         factoryKey: 'p1',         dept: '紙片生產部(印刷+軋盒+敲紙)', skipDept: false, docName: '一廠製程工單' },
+  'AFE19': { factory: '一廠',         factoryKey: 'p1',         dept: '紙片生產部(印刷+軋盒+敲紙)', skipDept: false, docName: '一廠製程工單(不報工不發料)' },
+  'AFXX1': { factory: '一廠',         factoryKey: 'p1',         dept: '委外',                       skipDept: false, docName: '委外工單' },
+  'AFXX2': { factory: '一廠',         factoryKey: 'p1',         dept: '委外',                       skipDept: false, docName: '委外製程工單' },
+  'AFE21': { factory: '一廠',         factoryKey: 'p1',         dept: '裁切部',                     skipDept: false, docName: '一廠裁切工單' },
+  'AFE22': { factory: '一廠',         factoryKey: 'p1',         dept: '裁切部',                     skipDept: false, docName: '一廠裁切重工工單' },
+
+  // 二廠(不顯示部門那層 — 直接從廠區跳到工單類別)
+  'AFF11': { factory: '二廠',         factoryKey: 'p2',         dept: '',                           skipDept: true,  docName: '二廠成型工單' },
+  'AFF12': { factory: '二廠',         factoryKey: 'p2',         dept: '',                           skipDept: true,  docName: '二廠成型重工工單' },
+
+  // 生技廠(不顯示部門那層)
+  'AFA11': { factory: '生技廠',       factoryKey: 'bio',        dept: '',                           skipDept: true,  docName: '生技廠成型工單' },
+  'AFA12': { factory: '生技廠',       factoryKey: 'bio',        dept: '',                           skipDept: true,  docName: '生技廠成型重工工單' },
+
+  // 美德廠(不顯示部門那層)
+  'AFB11': { factory: '美德廠',       factoryKey: 'md',         dept: '',                           skipDept: true,  docName: '美德廠成型工單' },
+  'AFB12': { factory: '美德廠',       factoryKey: 'md',         dept: '',                           skipDept: true,  docName: '美德廠成型重工工單' },
+
+  // 捷威廠(不顯示部門那層)
+  'AFD11': { factory: '捷威廠',       factoryKey: 'jw',         dept: '',                           skipDept: true,  docName: '捷威廠成型工單' },
+  'AFD12': { factory: '捷威廠',       factoryKey: 'jw',         dept: '',                           skipDept: true,  docName: '捷威廠成型重工工單' },
+
+  // 德暘廠紙類(顯示完整三層)
+  'AFC11': { factory: '德暘廠紙類',   factoryKey: 'dy_paper',   dept: '外帶盒部',                   skipDept: false, docName: '德暘廠外帶盒成型工單' },
+  'AFC12': { factory: '德暘廠紙類',   factoryKey: 'dy_paper',   dept: '外帶盒部',                   skipDept: false, docName: '德暘廠外帶盒成型重工工單' },
+  'AFC21': { factory: '德暘廠紙類',   factoryKey: 'dy_paper',   dept: '淋膜部',                     skipDept: false, docName: '德暘廠淋膜工單' },
+  'AFC22': { factory: '德暘廠紙類',   factoryKey: 'dy_paper',   dept: '淋膜部',                     skipDept: false, docName: '德暘廠淋膜重工工單' },
+  'AFC31': { factory: '德暘廠紙類',   factoryKey: 'dy_paper',   dept: '分條部',                     skipDept: false, docName: '德暘廠分條工單' },
+  'AFC32': { factory: '德暘廠紙類',   factoryKey: 'dy_paper',   dept: '分條部',                     skipDept: false, docName: '德暘廠分條重工工單' },
+  'AFC41': { factory: '德暘廠紙類',   factoryKey: 'dy_paper',   dept: '輪印部',                     skipDept: false, docName: '德暘廠輪印工單' },
+  'AFC42': { factory: '德暘廠紙類',   factoryKey: 'dy_paper',   dept: '輪印部',                     skipDept: false, docName: '德暘廠輪印重工工單' },
+
+  // 德暘廠塑膠類(顯示完整三層)
+  'AFC51': { factory: '德暘廠塑膠類', factoryKey: 'dy_plastic', dept: '壓板部',                     skipDept: false, docName: '德暘廠塑膠壓板工單' },
+  'AFC52': { factory: '德暘廠塑膠類', factoryKey: 'dy_plastic', dept: '壓板部',                     skipDept: false, docName: '德暘廠塑膠壓板重工工單' },
+  'AFC61': { factory: '德暘廠塑膠類', factoryKey: 'dy_plastic', dept: '塑膠成型部',                 skipDept: false, docName: '德暘廠塑膠成型工單' },
+  'AFC62': { factory: '德暘廠塑膠類', factoryKey: 'dy_plastic', dept: '塑膠成型部',                 skipDept: false, docName: '德暘廠塑膠成型重工工單' },
+  'AFC71': { factory: '德暘廠塑膠類', factoryKey: 'dy_plastic', dept: '塑膠印刷部',                 skipDept: false, docName: '德暘廠塑膠印刷工單' },
+  'AFC72': { factory: '德暘廠塑膠類', factoryKey: 'dy_plastic', dept: '塑膠印刷部',                 skipDept: false, docName: '德暘廠塑膠印刷重工工單' },
+  'AFC81': { factory: '德暘廠塑膠類', factoryKey: 'dy_plastic', dept: '塑膠粉碎部',                 skipDept: false, docName: '德暘廠塑膠粉碎工單' },
+};
+
+// 依工單號分類:取第 3-7 碼(0-indexed: chars 2..7)
+function classifyByWoNo(woNo) {
+  if (!woNo) return { factory: '未分類-需確認', factoryKey: 'unknown', dept: '(無工單號)', skipDept: true, docName: '未分類', prefix: '' };
+  const s = String(woNo).toUpperCase();
+  if (s.length < 7) return { factory: '未分類-需確認', factoryKey: 'unknown', dept: '(工單號過短)', skipDept: true, docName: '未分類', prefix: s };
+  const prefix = s.substring(2, 7);
+  const m = WO_PREFIX_MAPPING[prefix];
+  if (m) return { ...m, prefix };
+  // 對照表沒有 → 未分類
+  return { factory: '未分類-需確認', factoryKey: 'unknown', dept: `前綴 ${prefix}`, skipDept: true, docName: `未分類 (${prefix})`, prefix };
+}
+
+// 廠區顯示順序
+const FACTORY_ORDER = ['p1', 'p2', 'bio', 'jw', 'md', 'dy_paper', 'dy_plastic', 'unknown'];
+const FACTORY_LABELS = {
+  p1: '一廠', p2: '二廠', bio: '生技廠', jw: '捷威廠',
+  md: '美德廠', dy_paper: '德暘廠紙類', dy_plastic: '德暘廠塑膠類', unknown: '未分類-需確認',
+};
+
+// ===== 料號分類規則(依規格 V2 — 油墨 3EA 改為 3E)=====
+const MATERIAL_MAPPING = [
+  { prefix: '2AC', name: '紙片',          icon: '🟫' },
+  { prefix: '2AD', name: '底紙',          icon: '📄' },
+  { prefix: '2AE', name: '骨架',          icon: '🦴' },
+  { prefix: '2AF', name: '可選件',        icon: '🔘' },
+  { prefix: '2AA', name: '淋膜紙',        icon: '📜' },
+  { prefix: '2AB', name: '平張紙',        icon: '📃' },
+  { prefix: '2BB', name: '未套袋塑膠杯',  icon: '🥤' },
+  { prefix: '2BA', name: '板材',          icon: '⬛' },
+  { prefix: '3E',  name: '油墨',          icon: '🎨' },  // V2: 前 2 碼為 3E(原本是 3EA)
+  { prefix: '3A',  name: '原紙',          icon: '🧻' },
+  { prefix: '3B',  name: '塑膠原料',      icon: '🧪' },
+  { prefix: '3C',  name: '紙箱',          icon: '📦' },
+  { prefix: '3D',  name: '內袋',          icon: '🛍️' },
+];
+
+function classifyMaterial(matCode) {
+  if (!matCode) return { key: 'other', name: '其他', icon: '❓' };
+  const s = String(matCode).toUpperCase();
+  for (const m of MATERIAL_MAPPING) {
+    if (s.startsWith(m.prefix)) return { key: m.prefix, name: m.name, icon: m.icon };
+  }
+  return { key: 'other', name: '其他', icon: '❓' };
+}
+
+const MATERIAL_ORDER = MATERIAL_MAPPING.map(m => m.prefix).concat(['other']);
+
+// ===== 全域狀態 =====
+let erpData = null;
+let trackData = null;
+let workOrders = [];   // 工單陣列(已聚合,每張工單一筆)
+let completedWO = [];  // 本週完工(舊有 ERP 沒)
+let currentFilter = 'all';
+let searchQuery = '';
+let currentMonth = 'all';
+let analysisDate = '';
+
+// ===== DOM =====
+const erpInput = document.getElementById('erpFile');
+const trackInput = document.getElementById('trackFile');
+const erpBtn = document.getElementById('erpBtn');
+const trackBtn = document.getElementById('trackBtn');
+const analyzeBtn = document.getElementById('analyzeBtn');
+const uploadZone = document.getElementById('uploadZone');
+const toggleUploadBtn = document.getElementById('toggleUpload');
+const welcomeEl = document.getElementById('welcome');
+const resultEl = document.getElementById('result');
+
+// ===== 工具函式 =====
+function parseDate(v) {
+  if (!v) return null;
+  if (v instanceof Date) return isNaN(v) ? null : v;
+  const s = String(v);
+  const m = s.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+  if (m) return new Date(+m[1], +m[2]-1, +m[3]);
+  const d = new Date(s);
+  return isNaN(d) ? null : d;
+}
+function fmtDate(d) {
+  if (!d) return '';
+  if (typeof d === 'string') d = parseDate(d);
+  if (!d) return '';
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+function num(v) {
+  if (v === null || v === undefined || v === '') return 0;
+  const n = typeof v === 'number' ? v : parseFloat(String(v).replace(/,/g, ''));
+  return isNaN(n) ? 0 : n;
+}
+function pct(n, d) {
+  if (!d) return 0;
+  return Math.round(n / d * 1000) / 10;
+}
+function fmtNum(n) {
+  if (n === 0 || !isFinite(n)) return '0';
+  // 大數字加千分位
+  if (Math.abs(n) >= 1000) return Math.round(n).toLocaleString('en-US');
+  // 小數點處理
+  return (Math.round(n * 100) / 100).toString();
+}
+function readExcel(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const wb = XLSX.read(e.target.result, { type: 'array', cellDates: true });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        resolve(XLSX.utils.sheet_to_json(sheet, { defval: '' }));
+      } catch (err) { reject(err); }
+    };
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(file);
+  });
+}
+function escapeAttr(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'&#10;');
+}
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// ===== 檔案上傳處理 =====
+erpInput.addEventListener('change', async e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  document.getElementById('erpName').textContent = file.name;
+  erpBtn.classList.add('has-file');
+  try { erpData = await readExcel(file); checkReady(); }
+  catch (err) { showToast('讀取 ERP 檔失敗: ' + err.message); }
+});
+
+trackInput.addEventListener('change', async e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  document.getElementById('trackName').textContent = file.name;
+  trackBtn.classList.add('has-file');
+  try {
+    const wb = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
+    const sheet = wb.Sheets['累積追蹤'] || wb.Sheets[wb.SheetNames[0]];
+    trackData = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+    checkReady();
+  } catch (err) { showToast('讀取累積檔失敗: ' + err.message); }
+});
+
+function checkReady() { analyzeBtn.disabled = !erpData; }
+
+// 根據雲端狀態切換上傳 UI
+function updateUploadUI() {
+  const cfg = getSyncConfig();
+  const hasCloud = !!cfg.url;
+  const trackWrap = document.getElementById('trackFileWrap');
+  const cloudNotice = document.getElementById('cloudTrackNotice');
+  if (trackWrap) trackWrap.style.display = hasCloud ? 'none' : '';
+  if (cloudNotice) cloudNotice.style.display = hasCloud ? 'flex' : 'none';
+}
+
+analyzeBtn.addEventListener('click', async () => {
+  // 如果有雲端設定，從 workOrders 重建 trackData
+  const cfg = getSyncConfig();
+  if (cfg.url && !trackData && workOrders.length > 0) {
+    trackData = workOrders.map(w => ({
+      '工單號': w.woNo,
+      '單據日期': w.docDateStr || '',
+      '生管人員': w.pmName || '',
+      '品名': w.productSpec || '',
+      '生產數量': w.productionQty || 0,
+      '首次出現日期': w.firstSeenStr || '',
+      '首次匯入版本': w.version || 'V1',
+    }));
+    // 也把 completedWO 加進去（它們在 ERP 裡已消失但需要記憶）
+    completedWO.forEach(d => {
+      trackData.push({
+        '工單號': d.woNo,
+        '單據日期': d.docDate || '',
+        '生管人員': d.pmName || '',
+        '品名': d.productSpec || '',
+        '生產數量': d.productionQty || 0,
+        '首次出現日期': d.firstSeen || '',
+        '首次匯入版本': d.version || 'V1',
+      });
+    });
+  }
+  analyze();
+});
+
+// =============================================================
+// 密碼設定 — 直接修改下方的 UPLOAD_PASSWORD 即可換密碼
+// =============================================================
+const UPLOAD_PASSWORD = '1204';
+// =============================================================
+
+const pwdModal = document.getElementById('pwdModal');
+const pwdInput = document.getElementById('pwdInput');
+const pwdError = document.getElementById('pwdError');
+
+function openPwdModal() {
+  pwdModal.classList.add('show');
+  pwdInput.value = '';
+  pwdError.textContent = '';
+  pwdInput.classList.remove('error');
+  setTimeout(() => pwdInput.focus(), 50);
+}
+function closePwdModal() { pwdModal.classList.remove('show'); }
+function verifyPassword() {
+  if (pwdInput.value === UPLOAD_PASSWORD) {
+    closePwdModal();
+    uploadZone.classList.toggle('hidden');
+    showToast('已開啟上傳介面');
+  } else {
+    pwdError.textContent = '密碼錯誤,請重試';
+    pwdInput.classList.add('error');
+    pwdInput.value = '';
+    pwdInput.focus();
+  }
+}
+
+document.getElementById('pwdConfirm').addEventListener('click', verifyPassword);
+document.getElementById('pwdCancel').addEventListener('click', closePwdModal);
+pwdInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') verifyPassword();
+  if (e.key === 'Escape') closePwdModal();
+});
+pwdModal.addEventListener('click', e => {
+  if (e.target === pwdModal) closePwdModal();
+});
+
+// 圖示說明彈窗
+const legendModal = document.getElementById('legendModal');
+const legendBtn = document.getElementById('legendBtn');
+const legendClose = document.getElementById('legendClose');
+function openLegend() { legendModal.classList.add('show'); }
+function closeLegend() { legendModal.classList.remove('show'); }
+if (legendBtn) legendBtn.addEventListener('click', openLegend);
+if (legendClose) legendClose.addEventListener('click', closeLegend);
+if (legendModal) {
+  legendModal.addEventListener('click', e => { if (e.target === legendModal) closeLegend(); });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && legendModal.classList.contains('show')) closeLegend();
+  });
+}
+
+toggleUploadBtn.addEventListener('click', () => {
+  if (!uploadZone.classList.contains('hidden')) {
+    uploadZone.classList.add('hidden');
+    return;
+  }
+  openPwdModal();
+});
+
+// ===== 分析:把 ERP raw 資料聚合成「工單 + 料項」 =====
+function analyze() {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const fourteenDaysAgo = new Date(today); fourteenDaysAgo.setDate(today.getDate() - 14);
+  const thirtyDaysAgo = new Date(today); thirtyDaysAgo.setDate(today.getDate() - 30);
+
+  // 上次追蹤的工單 map(工單號 → 首次出現)
+  const trackMap = new Map();
+  if (trackData) {
+    trackData.forEach(t => {
+      const wo = String(t['工單號'] || '').trim();
+      if (wo && !wo.startsWith('(') && !wo.startsWith('{')) {
+        trackMap.set(wo, {
+          firstSeen: parseDate(t['首次出現日期']) || today,
+          version: t['首次匯入版本'] || 'V1',
+        });
+      }
+    });
+  }
+
+  // 計算下次版本號
+  let nextVersion = 'V1';
+  if (trackData && trackData.length > 0) {
+    const versions = [...new Set(trackData.map(t => t['首次匯入版本']))].filter(Boolean);
+    const nums = versions.map(v => parseInt(String(v).replace(/[^\d]/g,''),10)).filter(n => !isNaN(n));
+    nextVersion = 'V' + (Math.max(0, ...nums) + 1);
+  }
+
+  // 先過濾掉合計列 / 異常列(工單號為 "{*}", "(csfr...)", "(結束)")
+  const validRows = erpData.filter(r => {
+    const wo = String(r['單號'] || '').trim();
+    return wo && !wo.startsWith('(') && !wo.startsWith('{');
+  });
+
+  // 用 Map 聚合:工單號 → 工單資訊 + 料項陣列
+  const woMap = new Map();
+  validRows.forEach(r => {
+    const woNo = String(r['單號'] || '').trim();
+    if (!woNo) return;
+
+    if (!woMap.has(woNo)) {
+      const cls = classifyByWoNo(woNo);
+      woMap.set(woNo, {
+        woNo,
+        docDate: parseDate(r['單據日期']),
+        plannedStartDate: parseDate(r['預計開工日']),
+        pmId: String(r['生管人員'] || ''),
+        pmName: String(r['全名'] || ''),
+        productCode: String(r['生產料件編號'] || ''),
+        productSpec: String(r['品名'] || ''),
+        productDesc: String(r['規格'] || ''),
+        productUnitDesc: String(r['說明'] || ''),
+        productionQty: num(r['生產數量']),
+        completedQty: num(r['已入庫合格量']),
+        productionUnit: String(r['生產單位'] || ''),
+        deptCode: String(r['資料所有部門'] || ''),
+        noteShort: String(r['說明(簡稱)'] || ''),
+        noteFull: String(r['說明_2'] || ''),
+        factory: cls.factory,
+        factoryKey: cls.factoryKey,
+        dept: cls.dept,
+        skipDept: cls.skipDept,
+        docName: cls.docName,
+        prefix: cls.prefix,
+        materials: [],
+      });
+    }
+
+    const wo = woMap.get(woNo);
+    const matCls = classifyMaterial(r['發料料號']);
+    wo.materials.push({
+      itemNo: r['項次'],
+      matCode: String(r['發料料號'] || ''),
+      matName: String(r['品名_1'] || ''),
+      matSpec: String(r['規格_1'] || ''),
+      matFeature: String(r['產品特徵'] || ''),
+      matUnit: String(r['單位'] || ''),
+      matUnitDesc: String(r['說明_1'] || ''),
+      issued: num(r['已發數量']),
+      shouldIssue: num(r['應發數量']),
+      diff: num(r['差異數量']),
+      catKey: matCls.key,
+      catName: matCls.name,
+      catIcon: matCls.icon,
+    });
+  });
+
+  // (XLSX.utils.sheet_to_json 對重複的 header 自動加 _1 _2 後綴,實測過)
+
+  workOrders = [];
+  woMap.forEach(wo => {
+    // 入庫進度(K/J)
+    wo.kjPct = pct(wo.completedQty, wo.productionQty);
+    // 是否新工單
+    wo.isNew = !trackMap.has(wo.woNo);
+    wo.firstSeen = wo.isNew ? today : trackMap.get(wo.woNo).firstSeen;
+    wo.version = wo.isNew ? nextVersion : trackMap.get(wo.woNo).version;
+    // 警示判定
+    const refDate = wo.docDate || wo.firstSeen;
+    const isOldEnough14 = refDate && refDate <= fourteenDaysAgo;
+    const isOldEnough30 = refDate && refDate <= thirtyDaysAgo;
+    const isLowProgress = wo.kjPct < 80;
+    wo.isWarn = isOldEnough30 && isLowProgress;
+    wo.isAttn = !wo.isWarn && isOldEnough14 && isLowProgress;
+    // 料項數 + 發料統計(全部料項加總)
+    wo.materialCount = wo.materials.length;
+    let totalIssued = 0, totalShould = 0;
+    wo.materials.forEach(m => { totalIssued += m.issued; totalShould += m.shouldIssue; });
+    wo.totalIssued = totalIssued;
+    wo.totalShould = totalShould;
+    wo.stPct = pct(totalIssued, totalShould);
+    // 排序料項:依分類順序 + 料號
+    wo.materials.sort((a, b) => {
+      const oa = MATERIAL_ORDER.indexOf(a.catKey);
+      const ob = MATERIAL_ORDER.indexOf(b.catKey);
+      if (oa !== ob) return oa - ob;
+      return a.matCode.localeCompare(b.matCode);
+    });
+    // 該工單的料號分類聚合
+    const matCatMap = new Map();
+    wo.materials.forEach(m => {
+      if (!matCatMap.has(m.catKey)) {
+        matCatMap.set(m.catKey, {
+          key: m.catKey, name: m.catName, icon: m.catIcon,
+          items: [], totalIssued: 0, totalShould: 0,
+        });
+      }
+      const cat = matCatMap.get(m.catKey);
+      cat.items.push(m);
+      cat.totalIssued += m.issued;
+      cat.totalShould += m.shouldIssue;
+    });
+    matCatMap.forEach(cat => { cat.pct = pct(cat.totalIssued, cat.totalShould); });
+    wo.matCategories = [...matCatMap.values()].sort((a, b) => {
+      return MATERIAL_ORDER.indexOf(a.key) - MATERIAL_ORDER.indexOf(b.key);
+    });
+
+    // ===== 缺料補發判定 =====
+    // 規則:當工單入庫進度 ≥ 80% 時,檢查每個料項的「發料進度落後入庫進度」幅度
+    //   - 落後 10%-30% → 黃色提示
+    //   - 落後 30%+    → 紅色警告
+    //   - 應發數量為 0 的料項忽略(沒有應發代表不需要這料)
+    const SHORTAGE_CHECK_THRESHOLD = 80;  // 入庫進度需 ≥ 80% 才檢查
+    const SHORTAGE_ATTN = 10;             // 黃色閾值
+    const SHORTAGE_WARN = 30;             // 紅色閾值
+    let shortageList = [];
+    if (wo.kjPct >= SHORTAGE_CHECK_THRESHOLD) {
+      wo.materials.forEach(m => {
+        if (m.shouldIssue <= 0) return;
+        const issuePct = m.issued / m.shouldIssue * 100;
+        const gap = wo.kjPct - issuePct;  // 入庫進度 - 發料進度,正值代表發料落後
+        if (gap >= SHORTAGE_ATTN) {
+          // 估算「應補發數量」= 入庫進度比例下應該要發的量 - 已發數量
+          const expectedIssue = m.shouldIssue * wo.kjPct / 100;
+          const needRefill = Math.max(0, expectedIssue - m.issued);
+          m.shortage = {
+            level: gap >= SHORTAGE_WARN ? 'warn' : 'attn',
+            gap: Math.round(gap * 10) / 10,
+            issuePct: Math.round(issuePct * 10) / 10,
+            needRefill: Math.round(needRefill * 100) / 100,
+          };
+          shortageList.push(m);
+        }
+      });
+    }
+    wo.shortageCount = shortageList.length;
+    wo.shortageWarnCount = shortageList.filter(m => m.shortage.level === 'warn').length;
+    wo.shortageAttnCount = shortageList.filter(m => m.shortage.level === 'attn').length;
+    wo.hasShortage = shortageList.length > 0;
+    wo.hasShortageWarn = wo.shortageWarnCount > 0;
+
+    workOrders.push(wo);
+  });
+
+  // 工單依日期升冪排序(舊在上)
+  workOrders.sort((a, b) => {
+    const da = a.docDate ? a.docDate.getTime() : 0;
+    const db = b.docDate ? b.docDate.getTime() : 0;
+    if (da !== db) return da - db;
+    return a.woNo.localeCompare(b.woNo);
+  });
+
+  // 完工:上次追蹤檔有,但這次 ERP 沒有
+  const erpWOSet = new Set(workOrders.map(w => w.woNo));
+  completedWO = [];
+  if (trackData) {
+    trackData.forEach(t => {
+      const wo = String(t['工單號'] || '').trim();
+      if (wo && !wo.startsWith('(') && !wo.startsWith('{') && !erpWOSet.has(wo)) {
+        // 用工單號重新分類(避免舊版追蹤檔的廠區欄位不一致)
+        const cls = classifyByWoNo(wo);
+        completedWO.push({
+          woNo: wo,
+          docDate: fmtDate(parseDate(t['單據日期'])),
+          factory: cls.factory,
+          factoryKey: cls.factoryKey,
+          dept: cls.dept,
+          skipDept: cls.skipDept,
+          docName: cls.docName,
+          pmName: String(t['生管人員'] || ''),
+          productSpec: String(t['品名'] || ''),
+          firstSeen: fmtDate(parseDate(t['首次出現日期'])),
+          productionQty: num(t['生產數量']),
+        });
+      }
+    });
+  }
+
+  // 把 docDate / firstSeen 序列化成字串(方便存 localStorage)
+  workOrders.forEach(w => {
+    w.docDateStr = fmtDate(w.docDate);
+    w.firstSeenStr = fmtDate(w.firstSeen);
+    w.plannedStartDateStr = fmtDate(w.plannedStartDate);
+    delete w.docDate;
+    delete w.firstSeen;
+    delete w.plannedStartDate;
+  });
+
+  analysisDate = fmtDate(today);
+  saveToStorage();
+  render();
+
+  resultEl.style.display = 'block';
+  welcomeEl.style.display = 'none';
+  uploadZone.classList.add('hidden');
+  toggleUploadBtn.style.display = 'inline-flex';
+
+  showToast(`分析完成:共 ${workOrders.length} 張工單,${completedWO.length} 張完工`);
+
+  // 診斷
+  if (workOrders.length > 0) {
+    console.log('[工單追蹤] 分析完成');
+    console.log('  總工單:', workOrders.length);
+    console.log('  完工:', completedWO.length);
+    console.log('  新工單:', workOrders.filter(w => w.isNew).length);
+    console.log('  注意:', workOrders.filter(w => w.isAttn).length);
+    console.log('  警示:', workOrders.filter(w => w.isWarn).length);
+    console.log('  第一張:', workOrders[0]);
+  }
+}
+
+function saveToStorage() {
+  const payload = { workOrders, completedWO, analysisDate, savedAt: new Date().toISOString() };
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(payload)); } catch (err) { console.warn('Save failed:', err); }
+  saveToCloud(payload);
+}
+
+function loadFromStorage() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return false;
+    const s = JSON.parse(raw);
+    workOrders = s.workOrders || [];
+    completedWO = s.completedWO || [];
+    analysisDate = s.analysisDate || '';
+    return workOrders.length > 0;
+  } catch (err) { return false; }
+}
+
+async function tryLoadFromCloud() {
+  const cfg = getSyncConfig();
+  if (!cfg.url) { updateSyncStatusUI('none'); updateUploadUI(); return; }
+  const data = await loadFromCloud();
+  updateUploadUI();
+  if (!data) return;
+  const localRaw = localStorage.getItem(STORAGE_KEY);
+  if (localRaw) {
+    const local = JSON.parse(localRaw);
+    if (local.savedAt && data.savedAt && local.savedAt >= data.savedAt) return;
+  }
+  workOrders = data.workOrders || [];
+  completedWO = data.completedWO || [];
+  analysisDate = data.analysisDate || '';
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch(e) {}
+  if (workOrders.length > 0) {
+    render();
+    resultEl.style.display = 'block';
+    welcomeEl.style.display = 'none';
+    uploadZone.classList.add('hidden');
+    toggleUploadBtn.style.display = 'inline-flex';
+    showToast('已從雲端載入最新資料');
+  }
+}
+
+// ===== 渲染 =====
+function render() {
+  // === 1. 先做篩選(月份 + 警示等級 + 搜尋) ===
+  const filtered = workOrders.filter(w => {
+    if (currentFilter === 'new' && !w.isNew) return false;
+    if (currentFilter === 'attn' && !w.isAttn) return false;
+    if (currentFilter === 'warn' && !w.isWarn) return false;
+    if (currentFilter === 'shortage' && !w.hasShortage) return false;
+    // 月份篩選
+    if (currentMonth !== 'all') {
+      const d = w.docDateStr || '';
+      const m = d.match(/^(\d{4})-(\d{2})/);
+      const woMonth = m ? (m[1] + '-' + m[2]) : '__nodate__';
+      if (woMonth !== currentMonth) return false;
+    }
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      return (w.woNo || '').toLowerCase().includes(q) ||
+             (w.factory || '').toLowerCase().includes(q) ||
+             (w.dept || '').toLowerCase().includes(q) ||
+             (w.docName || '').toLowerCase().includes(q) ||
+             (w.pmName || '').toLowerCase().includes(q) ||
+             (w.productSpec || '').toLowerCase().includes(q) ||
+             (w.productDesc || '').toLowerCase().includes(q) ||
+             (w.productCode || '').toLowerCase().includes(q);
+    }
+    return true;
+  });
+
+  // === 2. 統計卡 / subtitle / BI 全部用「篩選後」的資料 ===
+  // 但「本週完工」是固定的(它記錄 ERP 消失的工單,跟視圖篩選無關)
+  const total = filtered.length;
+  const newCount = filtered.filter(w => w.isNew).length;
+  const attnCount = filtered.filter(w => w.isAttn).length;
+  const warnCount = filtered.filter(w => w.isWarn).length;
+  const shortageCount = filtered.filter(w => w.hasShortage).length;
+  const doneCount = completedWO.length;
+  let totalProd = 0, totalDone = 0, totalIss = 0, totalShould = 0;
+  filtered.forEach(w => {
+    totalProd += w.productionQty;
+    totalDone += w.completedQty;
+    totalIss += w.totalIssued;
+    totalShould += w.totalShould;
+  });
+  const avgKJ = pct(totalDone, totalProd);
+  const avgST = pct(totalIss, totalShould);
+
+  // 篩選狀態提示文字
+  const isFiltered = currentMonth !== 'all' || currentFilter !== 'all' || searchQuery;
+  let filterTag = '';
+  if (currentMonth !== 'all') {
+    if (currentMonth === '__nodate__') filterTag = '未指定月份';
+    else {
+      const [y, m] = currentMonth.split('-');
+      filterTag = y + '/' + parseInt(m, 10) + '月份';
+    }
+  }
+
+  const subText = document.getElementById('subtitleText');
+  if (subText) {
+    if (isFiltered) {
+      subText.innerHTML = `分析日期 ${analysisDate} · <span style="color:var(--accent);font-weight:600;">篩選後 ${total} 張</span>(全部 ${workOrders.length} 張) · 本週新工單 ${newCount} · 本週完工 ${doneCount}`;
+    } else {
+      subText.textContent =
+        `分析日期 ${analysisDate} · 共 ${total} 張未完工工單 · 本週新工單 ${newCount} · 本週完工 ${doneCount}`;
+    }
+  }
+
+  document.getElementById('stats').innerHTML = `
+    <div class="stat"><div class="label">未完工總數${isFiltered ? ' (篩選後)' : ''}</div><div class="value">${total}</div></div>
+    <div class="stat new"><div class="label">🆕 本週新工單${isFiltered ? ' (篩選後)' : ''}</div><div class="value">${newCount}</div></div>
+    <div class="stat" style="--accent:#f59e0b"><div class="label">🟡 注意 (14天+)${isFiltered ? ' (篩選後)' : ''}</div><div class="value" style="color:#b45309">${attnCount}</div></div>
+    <div class="stat warn"><div class="label">🔴 警示 (30天+)${isFiltered ? ' (篩選後)' : ''}</div><div class="value">${warnCount}</div></div>
+    <div class="stat" style="--accent:#ea580c"><div class="label">⚠️ 缺料工單${isFiltered ? ' (篩選後)' : ''}</div><div class="value" style="color:#c2410c">${shortageCount}</div></div>
+    <div class="stat"><div class="label">入庫 / 發料${isFiltered ? ' (篩選後)' : ''}</div><div class="value" style="font-size:18px">${avgKJ}% / ${avgST}%</div></div>
+    <div class="stat done"><div class="label">✅ 本週完工</div><div class="value">${doneCount}</div></div>
+  `;
+
+  // === 3. BI 看板用 filtered 渲染(讓所有圖表跟著篩選變) ===
+  renderBIDashboard(filtered);
+
+  // === 4. 月份下拉同步(用全資料填月份選項,避免被自己篩沒了) ===
+  updateMonthSelect();
+
+  // === 5. 明細列表 ===
+  const groups = groupByHierarchy(filtered);
+  document.getElementById('categoriesList').innerHTML =
+    renderFactories(groups) || '<div class="empty"><div class="title">無資料</div></div>';
+
+  document.getElementById('doneSection').innerHTML = renderDoneSection();
+
+  attachToggleHandlers();
+  attachCopyHandlers();
+  attachWoExpandHandlers();
+
+  // 預設展開所有大類(第 1 層)
+  document.querySelectorAll('.category-header').forEach(h => {
+    h.classList.add('open');
+    h.parentElement.classList.add('open');
+  });
+}
+
+// 依「廠區 → [部門] → 工單類別 → 工單」分組
+// 結構:
+//   { factoryKey: { name, skipDept, depts: { deptName: { docs: { docName: [wo,...] } } } } }
+// 當 skipDept = true 時,使用單一虛擬部門 '__direct__' 直接展開到工單類別
+function groupByHierarchy(records) {
+  const out = {};
+  records.forEach(w => {
+    const fk = w.factoryKey;
+    if (!out[fk]) {
+      out[fk] = {
+        name: w.factory,
+        skipDept: w.skipDept,
+        depts: {},
+      };
+    }
+    const deptKey = w.skipDept ? '__direct__' : (w.dept || '(未指定部門)');
+    if (!out[fk].depts[deptKey]) out[fk].depts[deptKey] = { docs: {} };
+    const docKey = w.docName || '(未分類)';
+    if (!out[fk].depts[deptKey].docs[docKey]) out[fk].depts[deptKey].docs[docKey] = [];
+    out[fk].depts[deptKey].docs[docKey].push(w);
+  });
+  return out;
+}
+
+function renderFactories(groups) {
+  const factoryKeys = Object.keys(groups).sort((a, b) => {
+    return FACTORY_ORDER.indexOf(a) - FACTORY_ORDER.indexOf(b);
+  });
+  if (factoryKeys.length === 0) return '';
+
+  return factoryKeys.map(fkey => {
+    const fac = groups[fkey];
+    // 收集所有工單
+    const allWOs = [];
+    Object.values(fac.depts).forEach(d => {
+      Object.values(d.docs).forEach(arr => allWOs.push(...arr));
+    });
+    const stats = calcWOStats(allWOs);
+    const doneCount = completedWO.filter(d => d.factoryKey === fkey).length;
+    const allDocNos = allWOs.map(w => w.woNo).join('\n');
+    const isUnknown = fkey === 'unknown';
+    const tagClass = isUnknown ? 'tag-admin' : 'tag-prod';
+    const tagText = isUnknown ? '異常' : '生產';
+
+    // 部門排序:依工單數降冪
+    const deptKeys = Object.keys(fac.depts).sort((a, b) => {
+      const ca = Object.values(fac.depts[a].docs).reduce((s, arr) => s + arr.length, 0);
+      const cb = Object.values(fac.depts[b].docs).reduce((s, arr) => s + arr.length, 0);
+      return cb - ca;
+    });
+
+    return `
+      <div class="category">
+        <div class="category-header" data-toggle="cat">
+          <span class="toggle-icon">▶</span>
+          <span class="category-tag ${tagClass}">${tagText}</span>
+          <span class="category-name">${escapeHtml(fac.name)}</span>
+          <span class="num-badge ${doneCount > 0 ? 'done' : 'empty'}"><span class="lbl">本週完工</span>${doneCount}</span>
+          <span class="num-badge ${stats.newCount > 0 ? 'new' : 'empty'}"><span class="lbl">新工單</span>${stats.newCount}</span>
+          <span class="total-count">${stats.total}<span class="unit">張</span></span>
+          <button class="copy-btn" data-copy="${escapeAttr(allDocNos)}" onclick="event.stopPropagation()">📋 複製全部</button>
+        </div>
+        <div class="category-body">
+          ${deptKeys.map(dk => {
+            // skipDept 的廠區 → 直接展開工單類別,不顯示部門那層
+            if (dk === '__direct__') {
+              const docKeys = Object.keys(fac.depts[dk].docs).sort((a, b) =>
+                fac.depts[dk].docs[b].length - fac.depts[dk].docs[a].length);
+              return docKeys.map(docName =>
+                renderDocType(docName, fac.depts[dk].docs[docName], fkey, '', /*indent*/ 1)
+              ).join('');
+            }
+            return renderDept(dk, fac.depts[dk], fkey);
+          }).join('')}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// 部門層(第 3 層 — 只給「一廠 / 德暘廠紙類 / 德暘廠塑膠類」用)
+function renderDept(deptName, deptObj, factoryKey) {
+  const allWOs = [];
+  Object.values(deptObj.docs).forEach(arr => allWOs.push(...arr));
+  const stats = calcWOStats(allWOs);
+  const doneCount = completedWO.filter(d => d.factoryKey === factoryKey && d.dept === deptName).length;
+  const docNos = allWOs.map(w => w.woNo).join('\n');
+  const docKeys = Object.keys(deptObj.docs).sort((a, b) => deptObj.docs[b].length - deptObj.docs[a].length);
+
+  return `
+    <div class="dept-group">
+      <div class="dept-header" data-toggle="dept">
+        <span class="toggle-icon">▶</span>
+        <span class="dept-name">${escapeHtml(deptName)}</span>
+        <span class="num-badge ${doneCount > 0 ? 'done' : 'empty'}"><span class="lbl">本週完工</span>${doneCount}</span>
+        <span class="num-badge ${stats.newCount > 0 ? 'new' : 'empty'}"><span class="lbl">新工單</span>${stats.newCount}</span>
+        <span class="total-count">${stats.total}<span class="unit">張</span></span>
+        <button class="copy-btn" data-copy="${escapeAttr(docNos)}" onclick="event.stopPropagation()">📋 複製</button>
+      </div>
+      <div class="dept-body">
+        ${docKeys.map(docName => renderDocType(docName, deptObj.docs[docName], factoryKey, deptName, /*indent*/ 2)).join('')}
+      </div>
+    </div>
+  `;
+}
+
+// 工單類別層(第 4 層 — 顯示單據名稱,例如「生技廠成型工單」)
+// indent: 1 = 直接接在廠區下 (skipDept), 2 = 接在部門下
+function renderDocType(docName, wos, factoryKey, deptName, indent) {
+  const stats = calcWOStats(wos);
+  const doneCount = completedWO.filter(d =>
+    d.factoryKey === factoryKey &&
+    (deptName === '' || d.dept === deptName) &&
+    d.docName === docName
+  ).length;
+  const docNos = wos.map(w => w.woNo).join('\n');
+
+  // 依「單據日期」的年月分組(沒有日期的歸到「未指定月份」)
+  const byMonth = {};
+  wos.forEach(w => {
+    const d = w.docDateStr || '';
+    const m = d.match(/^(\d{4})-(\d{2})/);
+    const key = m ? (m[1] + '-' + m[2]) : '__nodate__';
+    if (!byMonth[key]) byMonth[key] = [];
+    byMonth[key].push(w);
+  });
+  // 月份排序:舊月份在上(升冪),沒日期的放最後
+  const monthKeys = Object.keys(byMonth).sort((a, b) => {
+    if (a === '__nodate__') return 1;
+    if (b === '__nodate__') return -1;
+    return a.localeCompare(b);
+  });
+
+  return `
+    <div class="owner-group" data-indent="${indent}">
+      <div class="owner-header" data-toggle="owner">
+        <span class="toggle-icon">▶</span>
+        <span class="owner-name">${escapeHtml(docName)}</span>
+        <span class="num-badge ${doneCount > 0 ? 'done' : 'empty'}"><span class="lbl">本週完工</span>${doneCount}</span>
+        <span class="num-badge ${stats.newCount > 0 ? 'new' : 'empty'}"><span class="lbl">新工單</span>${stats.newCount}</span>
+        <span class="total-count">${stats.total}<span class="unit">張</span></span>
+        <button class="copy-btn" data-copy="${escapeAttr(docNos)}" onclick="event.stopPropagation()">📋 複製</button>
+      </div>
+      <div class="owner-body">
+        ${monthKeys.map(mk => renderMonth(mk, byMonth[mk])).join('')}
+      </div>
+    </div>
+  `;
+}
+
+// 月份層(第 5 層 — 在工單類別與工單列中間)
+function renderMonth(monthKey, wos) {
+  const stats = calcWOStats(wos);
+  const docNos = wos.map(w => w.woNo).join('\n');
+  let label;
+  if (monthKey === '__nodate__') {
+    label = '未指定月份';
+  } else {
+    const [y, m] = monthKey.split('-');
+    label = y + '/' + parseInt(m, 10) + '月份';
+  }
+
+  return `
+    <div class="month-group">
+      <div class="month-header" data-toggle="month">
+        <span class="toggle-icon">▶</span>
+        <span class="month-name">📅 ${escapeHtml(label)}</span>
+        <span class="num-badge ${stats.warnCount > 0 ? 'warn-badge' : 'empty'}"><span class="lbl">警示</span>${stats.warnCount}</span>
+        <span class="num-badge ${stats.attnCount > 0 ? 'attn-badge' : 'empty'}"><span class="lbl">注意</span>${stats.attnCount}</span>
+        <span class="num-badge ${stats.newCount > 0 ? 'new' : 'empty'}"><span class="lbl">新工單</span>${stats.newCount}</span>
+        <span class="total-count">${stats.total}<span class="unit">張</span></span>
+        <button class="copy-btn" data-copy="${escapeAttr(docNos)}" onclick="event.stopPropagation()">📋 複製</button>
+      </div>
+      <div class="month-body">
+        ${wos.map(w => renderWO(w)).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function calcWOStats(wos) {
+  return {
+    total: wos.length,
+    newCount: wos.filter(w => w.isNew).length,
+    attnCount: wos.filter(w => w.isAttn).length,
+    warnCount: wos.filter(w => w.isWarn).length,
+  };
+}
+
+function renderWO(w) {
+  let cls = '';
+  if (w.isWarn) cls = 'warn';
+  else if (w.isAttn) cls = 'attn';
+
+  // 進度條
+  const kjLevel = w.kjPct >= 80 ? 'high' : (w.kjPct >= 50 ? 'mid' : 'low');
+  const kjFillClass = w.kjPct >= 80 ? '' : (w.kjPct >= 50 ? 'mid' : 'low');
+
+  return `
+    <div class="wo-row ${cls}" data-wo="${escapeAttr(w.woNo)}">
+      <div class="badges">
+        ${w.isNew ? '<span class="badge new">🆕新</span>' : ''}
+        ${w.isAttn ? '<span class="badge attn">🟡注意</span>' : ''}
+        ${w.isWarn ? '<span class="badge warn-strong">🔴警示</span>' : ''}
+        ${w.hasShortage ? `<span class="badge ${w.hasShortageWarn ? 'shortage-warn' : 'shortage-attn'}" title="${w.shortageWarnCount} 項嚴重缺料 / ${w.shortageAttnCount} 項輕度缺料">⚠️缺料${w.shortageCount}</span>` : ''}
+        <span class="wo-toggle">▶</span>
+      </div>
+      <span class="wo-no" data-copy-single="${escapeAttr(w.woNo)}" title="點擊複製單號">${escapeHtml(w.woNo)}</span>
+      <span class="wo-name" title="${escapeAttr(w.productSpec + ' / ' + w.productDesc)}">${escapeHtml(w.productSpec)} ${escapeHtml(w.productDesc)}</span>
+      <span class="wo-qty"><span class="label">入庫/生產</span>${fmtNum(w.completedQty)}/${fmtNum(w.productionQty)}</span>
+      <div class="progress-mini">
+        <div class="progress-bar"><div class="progress-fill ${kjFillClass}" style="width:${Math.min(100, w.kjPct)}%"></div></div>
+        <span class="progress-text ${kjLevel}">${w.kjPct}%</span>
+      </div>
+      <span class="wo-qty"><span class="label">生管</span>${escapeHtml(w.pmName || '-')}</span>
+      <span class="wo-date">${escapeHtml(w.docDateStr)}</span>
+    </div>
+    <div class="wo-detail" data-detail="${escapeAttr(w.woNo)}">
+      ${renderWODetail(w)}
+    </div>
+  `;
+}
+
+function renderWODetail(w) {
+  if (!w.matCategories || w.matCategories.length === 0) {
+    return '<div style="color:var(--text-muted);font-size:12px;padding:6px 12px;">此工單無料項資料</div>';
+  }
+
+  return w.matCategories.map(cat => {
+    const catLevel = cat.pct >= 80 ? 'high' : (cat.pct >= 50 ? 'mid' : 'low');
+    const catFillClass = cat.pct >= 80 ? '' : (cat.pct >= 50 ? 'mid' : 'low');
+
+    return `
+      <div class="mat-cat-group">
+        <div class="mat-cat-header">
+          <span class="mat-cat-name">${cat.icon} ${escapeHtml(cat.name)} <span style="color:var(--text-muted);font-weight:500;">(${cat.items.length} 項)</span></span>
+          <span class="mat-cat-stats">
+            <span style="margin-right:10px;">已發 ${fmtNum(cat.totalIssued)} / 應發 ${fmtNum(cat.totalShould)}</span>
+            <span class="progress-mini" style="display:inline-flex;">
+              <div class="progress-bar"><div class="progress-fill ${catFillClass}" style="width:${Math.min(100, cat.pct)}%"></div></div>
+              <span class="progress-text ${catLevel}">${cat.pct}%</span>
+            </span>
+          </span>
+        </div>
+        ${cat.items.map(m => {
+          const sh = m.shortage;
+          const rowClass = sh ? (sh.level === 'warn' ? 'shortage-warn-row' : 'shortage-attn-row') : '';
+          return `
+          <div class="mat-row ${rowClass}">
+            <span class="mat-no" data-copy-single="${escapeAttr(m.matCode)}" title="點擊複製料號">${escapeHtml(m.matCode)}</span>
+            <span class="mat-name" title="${escapeAttr(m.matName + ' / ' + m.matSpec)}">${sh ? (sh.level === 'warn' ? '🔴 ' : '🟡 ') : ''}${escapeHtml(m.matName)} ${escapeHtml(m.matSpec)}${sh ? `<span class="shortage-tag">缺料 ${sh.gap}% · 建議補發 ${fmtNum(sh.needRefill)}${escapeHtml(m.matUnit || '')}</span>` : ''}</span>
+            <span class="mat-num"><span class="label">已發</span>${fmtNum(m.issued)}</span>
+            <span class="mat-num"><span class="label">應發</span>${fmtNum(m.shouldIssue)}</span>
+            <span class="mat-num ${m.diff > 0 ? 'diff-bad' : ''}"><span class="label">差異</span>${fmtNum(m.diff)}</span>
+            <span class="mat-num ${sh ? 'diff-bad' : ''}"><span class="label">${escapeHtml(m.matUnit || '')}</span>${m.shouldIssue > 0 ? Math.round(m.issued/m.shouldIssue*100) + '%' : '-'}</span>
+          </div>
+        `;}).join('')}
+      </div>
+    `;
+  }).join('');
+}
+
+function renderDoneSection() {
+  if (completedWO.length === 0) return '';
+  const docNos = completedWO.map(d => d.woNo).join('\n');
+  return `
+    <div class="section-title">本週完工 (已從 ERP 消失)</div>
+    <div class="done-section">
+      <div class="done-header" data-toggle="done">
+        <span class="toggle-icon">▶</span>
+        <span class="done-tag">✅ 完工</span>
+        <span class="done-title">本週共完工 ${completedWO.length} 張</span>
+        <button class="copy-btn" data-copy="${escapeAttr(docNos)}" onclick="event.stopPropagation()">📋 複製全部</button>
+      </div>
+      <div class="done-body">
+        ${completedWO.map(d => `
+          <div class="done-row">
+            <span class="badge done">✅完工</span>
+            <span class="doc-no" data-copy-single="${escapeAttr(d.woNo)}" title="點擊複製" style="font-family:'SF Mono',Menlo,monospace;font-size:12px;font-weight:600;cursor:pointer;">${escapeHtml(d.woNo)}</span>
+            <span style="color:var(--text-muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(d.productSpec)}</span>
+            <span style="color:var(--text-muted);font-size:12px;">${escapeHtml(d.factory)}${d.docName ? ' · ' + escapeHtml(d.docName) : ''} · ${escapeHtml(d.pmName)}</span>
+            <span style="color:var(--text-dim);font-size:11px;text-align:right;">出現:${escapeHtml(d.firstSeen)}</span>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+// ===== BI 看板 =====
+function renderBIDashboard(viewWOs) {
+  const dashboard = document.getElementById('biDashboard');
+  if (!dashboard) return;
+  // viewWOs = 篩選後的視圖資料,沒傳就用全部
+  const wos = viewWOs || workOrders;
+
+  const groupStats = {};
+  FACTORY_ORDER.forEach(k => {
+    groupStats[k] = {
+      name: FACTORY_LABELS[k], total: 0, newWO: 0, attn: 0, warn: 0, done: 0,
+      totalProd: 0, totalDone: 0, totalIss: 0, totalShould: 0,
+    };
+  });
+
+  wos.forEach(w => {
+    const k = w.factoryKey;
+    if (!groupStats[k]) return;
+    groupStats[k].total++;
+    if (w.isNew) groupStats[k].newWO++;
+    if (w.isAttn) groupStats[k].attn++;
+    if (w.isWarn) groupStats[k].warn++;
+    groupStats[k].totalProd += w.productionQty;
+    groupStats[k].totalDone += w.completedQty;
+    groupStats[k].totalIss += w.totalIssued;
+    groupStats[k].totalShould += w.totalShould;
+  });
+
+  completedWO.forEach(d => {
+    // factoryKey 已在 analyze 時算好(用 classifyByWoNo)
+    const k = d.factoryKey;
+    if (groupStats[k]) groupStats[k].done++;
+  });
+
+  // 圓餅卡
+  const donutCards = FACTORY_ORDER.map(k => {
+    const g = groupStats[k];
+    if (!g.name || g.total === 0) return '';
+    return renderDonutCard(g);
+  }).filter(Boolean).join('');
+
+  // 排行
+  const sortedGroups = FACTORY_ORDER.map(k => groupStats[k])
+    .filter(g => g.name && g.total > 0)
+    .slice().sort((a, b) => b.total - a.total);
+  const maxTotal = Math.max(1, ...sortedGroups.map(g => g.total));
+  const barRows = sortedGroups.map(g => {
+    const p = (g.total / maxTotal * 100).toFixed(1);
+    const isWarn = g.warn / Math.max(1, g.total) > 0.5;
+    return `
+      <div class="bi-bar-row">
+        <span class="bi-bar-label">${escapeHtml(g.name)}</span>
+        <div class="bi-bar-track"><div class="bi-bar-fill ${isWarn ? 'warn' : ''}" style="width:${p}%"></div></div>
+        <span class="bi-bar-num">${g.total}</span>
+      </div>
+    `;
+  }).join('');
+
+  // 警示集中度
+  const warnGroups = sortedGroups.slice().sort((a, b) => b.warn - a.warn);
+  const maxWarn = Math.max(1, ...warnGroups.map(g => g.warn));
+  const warnRows = warnGroups.map(g => {
+    const p = (g.warn / maxWarn * 100).toFixed(1);
+    return `
+      <div class="bi-bar-row">
+        <span class="bi-bar-label">${escapeHtml(g.name)}</span>
+        <div class="bi-bar-track"><div class="bi-bar-fill warn" style="width:${p}%"></div></div>
+        <span class="bi-bar-num">${g.warn}</span>
+      </div>
+    `;
+  }).join('');
+
+  // 入庫進度排行
+  const progGroups = sortedGroups.slice().sort((a, b) => {
+    const pa = pct(a.totalDone, a.totalProd);
+    const pb = pct(b.totalDone, b.totalProd);
+    return pa - pb; // 進度低的在前
+  });
+  const progRows = progGroups.map(g => {
+    const kj = pct(g.totalDone, g.totalProd);
+    const cls = kj >= 80 ? '' : (kj >= 50 ? 'mid' : 'warn');
+    const fill = `style="width:${Math.min(100, kj)}%;background:${kj >= 80 ? 'linear-gradient(90deg,#34d399,#10b981)' : kj >= 50 ? 'linear-gradient(90deg,#fbbf24,#f59e0b)' : 'linear-gradient(90deg,#f87171,#dc2626)'};"`;
+    return `
+      <div class="bi-bar-row">
+        <span class="bi-bar-label">${escapeHtml(g.name)}</span>
+        <div class="bi-bar-track"><div class="bi-bar-fill" ${fill}></div></div>
+        <span class="bi-bar-num">${kj}%</span>
+      </div>
+    `;
+  }).join('');
+
+  // 本週進度對比
+  const maxNew = Math.max(1, ...sortedGroups.map(g => Math.max(g.newWO, g.done)));
+  const stackRows = sortedGroups.map(g => {
+    const newPct = (g.newWO / maxNew * 100).toFixed(1);
+    const donePct = (g.done / maxNew * 100).toFixed(1);
+    return `
+      <div class="bi-bar-row" style="grid-template-columns:130px 1fr 36px 1fr 36px;">
+        <span class="bi-bar-label">${escapeHtml(g.name)}</span>
+        <div class="bi-bar-track"><div class="bi-bar-fill new" style="width:${newPct}%"></div></div>
+        <span class="bi-bar-num" style="color:var(--new-text);">${g.newWO}</span>
+        <div class="bi-bar-track"><div class="bi-bar-fill done" style="width:${donePct}%"></div></div>
+        <span class="bi-bar-num" style="color:var(--done-text);">${g.done}</span>
+      </div>
+    `;
+  }).join('');
+
+  dashboard.innerHTML = `
+    <div class="bi-section-title">📊 各廠區狀態(圓餅圖)</div>
+    <div class="bi-grid cols-7">
+      ${donutCards}
+    </div>
+
+    <div class="bi-section-title">📈 各廠區未完工工單排行</div>
+    <div class="bi-bar-chart">
+      ${barRows || '<div style="color:var(--text-muted);font-size:12px;">無資料</div>'}
+    </div>
+
+    <div class="bi-section-title">🔴 警示集中度(30天+ 排行)</div>
+    <div class="bi-bar-chart">
+      ${warnRows || '<div style="color:var(--text-muted);font-size:12px;">無資料</div>'}
+    </div>
+
+    <div class="bi-section-title">📦 入庫進度排行(進度低的在前)</div>
+    <div class="bi-bar-chart">
+      ${progRows || '<div style="color:var(--text-muted);font-size:12px;">無資料</div>'}
+    </div>
+
+    <div class="bi-section-title">⚖️ 本週進度對比(綠=新工單 / 紫=完工)</div>
+    <div class="bi-bar-chart">
+      <div class="bi-bar-row" style="grid-template-columns:130px 1fr 36px 1fr 36px;font-size:11px;color:var(--text-muted);font-weight:700;border-bottom:1px solid var(--border);padding-bottom:6px;margin-bottom:4px;">
+        <span></span>
+        <span style="text-align:center;">🆕 本週新工單</span>
+        <span></span>
+        <span style="text-align:center;">✅ 本週完工</span>
+        <span></span>
+      </div>
+      ${stackRows || '<div style="color:var(--text-muted);font-size:12px;">無資料</div>'}
+    </div>
+
+    ${renderBIMonthSection()}
+  `;
+}
+
+// === BI 月份分析 ===
+// 月份比較天生需要看「所有月份」才有意義,但其他篩選(警示/搜尋)還是要套用。
+// 所以這裡只忽略 currentMonth,套用 currentFilter 和 searchQuery。
+function renderBIMonthSection() {
+  const wos = workOrders.filter(w => {
+    if (currentFilter === 'new' && !w.isNew) return false;
+    if (currentFilter === 'attn' && !w.isAttn) return false;
+    if (currentFilter === 'warn' && !w.isWarn) return false;
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      return (w.woNo || '').toLowerCase().includes(q) ||
+             (w.factory || '').toLowerCase().includes(q) ||
+             (w.dept || '').toLowerCase().includes(q) ||
+             (w.docName || '').toLowerCase().includes(q) ||
+             (w.pmName || '').toLowerCase().includes(q) ||
+             (w.productSpec || '').toLowerCase().includes(q) ||
+             (w.productDesc || '').toLowerCase().includes(q) ||
+             (w.productCode || '').toLowerCase().includes(q);
+    }
+    return true;
+  });
+
+  // 全廠依月份統計
+  const monthMap = {};
+  wos.forEach(w => {
+    const d = w.docDateStr || '';
+    const m = d.match(/^(\d{4})-(\d{2})/);
+    const key = m ? (m[1] + '-' + m[2]) : '__nodate__';
+    if (!monthMap[key]) {
+      monthMap[key] = {
+        total: 0, newWO: 0, attn: 0, warn: 0,
+        totalProd: 0, totalDone: 0,
+      };
+    }
+    monthMap[key].total++;
+    if (w.isNew) monthMap[key].newWO++;
+    if (w.isAttn) monthMap[key].attn++;
+    if (w.isWarn) monthMap[key].warn++;
+    monthMap[key].totalProd += w.productionQty;
+    monthMap[key].totalDone += w.completedQty;
+  });
+
+  const monthKeys = Object.keys(monthMap).sort((a, b) => {
+    if (a === '__nodate__') return 1;
+    if (b === '__nodate__') return -1;
+    return a.localeCompare(b);
+  });
+
+  if (monthKeys.length === 0) return '';
+
+  const monthLabel = mk => {
+    if (mk === '__nodate__') return '未指定';
+    const [y, m] = mk.split('-');
+    return y + '/' + parseInt(m, 10) + '月';
+  };
+
+  // 1) 全廠月份總覽 — 卡片式
+  const overviewCards = monthKeys.map(mk => {
+    const g = monthMap[mk];
+    const kj = pct(g.totalDone, g.totalProd);
+    const rateColor = kj >= 80 ? 'var(--done-text)' : (kj >= 50 ? '#b45309' : 'var(--warn-text)');
+    const hasWarn = g.warn > 0;
+    return `
+      <div class="bi-card ${hasWarn ? 'has-warning' : ''}">
+        <div class="bi-card-title">
+          <span>📅 ${monthLabel(mk)}</span>
+        </div>
+        <div style="display:flex;align-items:baseline;gap:8px;justify-content:space-between;margin:4px 0 8px;">
+          <div class="bi-card-total" style="margin:0;">${g.total}<span class="unit">張</span></div>
+          <div style="text-align:right;">
+            <div style="font-size:18px;font-weight:700;color:${rateColor};font-variant-numeric:tabular-nums;line-height:1;">${kj}%</div>
+            <div style="font-size:10px;color:var(--text-muted);margin-top:2px;">入庫進度</div>
+          </div>
+        </div>
+        <div class="bi-donut-legend" style="font-size:11px;">
+          <div class="legend-item"><span class="dot" style="background:#10b981"></span><span class="label">🆕 新工單</span><span class="num">${g.newWO}</span></div>
+          <div class="legend-item"><span class="dot" style="background:#f59e0b"></span><span class="label">🟡 注意</span><span class="num">${g.attn}</span></div>
+          <div class="legend-item"><span class="dot" style="background:#dc2626"></span><span class="label">🔴 警示</span><span class="num">${g.warn}</span></div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  // 2) 月份排行(全廠工單數)
+  const maxMonth = Math.max(1, ...monthKeys.map(k => monthMap[k].total));
+  const monthBarRows = monthKeys.map(mk => {
+    const g = monthMap[mk];
+    const p = (g.total / maxMonth * 100).toFixed(1);
+    const isWarn = g.warn / Math.max(1, g.total) > 0.4;
+    return `
+      <div class="bi-bar-row">
+        <span class="bi-bar-label">📅 ${monthLabel(mk)}</span>
+        <div class="bi-bar-track"><div class="bi-bar-fill ${isWarn ? 'warn' : ''}" style="width:${p}%"></div></div>
+        <span class="bi-bar-num">${g.total}</span>
+      </div>
+    `;
+  }).join('');
+
+  // 3) 各廠區 × 月份矩陣(每個廠區一行 bar group)
+  const factoryMonthMap = {};
+  FACTORY_ORDER.forEach(fk => { factoryMonthMap[fk] = { name: FACTORY_LABELS[fk], months: {} }; });
+  wos.forEach(w => {
+    const fk = w.factoryKey;
+    if (!factoryMonthMap[fk]) return;
+    const d = w.docDateStr || '';
+    const m = d.match(/^(\d{4})-(\d{2})/);
+    const key = m ? (m[1] + '-' + m[2]) : '__nodate__';
+    if (!factoryMonthMap[fk].months[key]) {
+      factoryMonthMap[fk].months[key] = { total: 0, warn: 0 };
+    }
+    factoryMonthMap[fk].months[key].total++;
+    if (w.isWarn) factoryMonthMap[fk].months[key].warn++;
+  });
+
+  // 找全廠單一月份的最大值,用來定 bar 寬度的基準
+  let globalMax = 1;
+  Object.values(factoryMonthMap).forEach(f => {
+    Object.values(f.months).forEach(m => { if (m.total > globalMax) globalMax = m.total; });
+  });
+
+  const factoryMonthRows = FACTORY_ORDER.map(fk => {
+    const f = factoryMonthMap[fk];
+    if (!f.name) return '';
+    const total = Object.values(f.months).reduce((s, x) => s + x.total, 0);
+    if (total === 0) return '';
+    // 該廠區所有月份的小柱排成一橫排
+    const cells = monthKeys.map(mk => {
+      const m = f.months[mk];
+      if (!m) {
+        return `<div class="bi-fm-cell"><div class="bi-fm-bar"></div><span class="bi-fm-num">—</span></div>`;
+      }
+      const h = (m.total / globalMax * 100).toFixed(1);
+      const isWarn = m.warn / Math.max(1, m.total) > 0.4;
+      const fill = isWarn ? 'linear-gradient(180deg,#f87171,#dc2626)' : 'linear-gradient(180deg,#34d399,#0d9488)';
+      return `
+        <div class="bi-fm-cell" title="${monthLabel(mk)} - ${f.name}: ${m.total} 張 (警示 ${m.warn})">
+          <div class="bi-fm-bar-track"><div class="bi-fm-bar" style="height:${h}%;background:${fill};"></div></div>
+          <span class="bi-fm-num">${m.total}</span>
+        </div>
+      `;
+    }).join('');
+    return `
+      <div class="bi-fm-row">
+        <span class="bi-fm-factory">${f.name}<span class="bi-fm-total">${total}</span></span>
+        <div class="bi-fm-cells">${cells}</div>
+      </div>
+    `;
+  }).filter(Boolean).join('');
+
+  // 月份 header(配合 cells)
+  const monthHeader = monthKeys.map(mk => `<span class="bi-fm-month-label">${monthLabel(mk)}</span>`).join('');
+
+  return `
+    <div class="bi-section-title">📅 月份總覽</div>
+    <div class="bi-grid cols-3" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr));">
+      ${overviewCards}
+    </div>
+
+    <div class="bi-section-title">📊 各月份工單數排行</div>
+    <div class="bi-bar-chart">
+      ${monthBarRows}
+    </div>
+
+    <div class="bi-section-title">🏭 各廠區 × 月份趨勢(綠=正常 / 紅=警示佔比高)</div>
+    <div class="bi-bar-chart">
+      <div class="bi-fm-row" style="border-bottom:1px solid var(--border);padding-bottom:6px;margin-bottom:6px;">
+        <span class="bi-fm-factory" style="font-size:11px;color:var(--text-muted);font-weight:700;">廠區 ＼ 月份</span>
+        <div class="bi-fm-cells" style="align-items:flex-end;">${monthHeader}</div>
+      </div>
+      ${factoryMonthRows || '<div style="color:var(--text-muted);font-size:12px;">無資料</div>'}
+    </div>
+
+    ${renderBIShortageSection()}
+  `;
+}
+
+// === BI 缺料補發優先名單 ===
+// 把所有有缺料的料項抓出來,依 gap (落後幅度) 排序
+function renderBIShortageSection() {
+  // 套用警示/搜尋篩選(月份不套用,因為要看全期缺料)
+  const wos = workOrders.filter(w => {
+    if (currentFilter === 'new' && !w.isNew) return false;
+    if (currentFilter === 'attn' && !w.isAttn) return false;
+    if (currentFilter === 'warn' && !w.isWarn) return false;
+    if (currentFilter === 'shortage' && !w.hasShortage) return false;
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      return (w.woNo || '').toLowerCase().includes(q) ||
+             (w.factory || '').toLowerCase().includes(q) ||
+             (w.dept || '').toLowerCase().includes(q) ||
+             (w.docName || '').toLowerCase().includes(q) ||
+             (w.pmName || '').toLowerCase().includes(q) ||
+             (w.productSpec || '').toLowerCase().includes(q) ||
+             (w.productDesc || '').toLowerCase().includes(q) ||
+             (w.productCode || '').toLowerCase().includes(q);
+    }
+    return true;
+  });
+
+  // 收集所有缺料的料項(跨工單)
+  const allShortage = [];
+  wos.forEach(w => {
+    if (!w.hasShortage) return;
+    w.materials.forEach(m => {
+      if (m.shortage) {
+        allShortage.push({
+          wo: w,
+          mat: m,
+        });
+      }
+    });
+  });
+
+  if (allShortage.length === 0) {
+    return `
+      <div class="bi-section-title">⚠️ 缺料補發優先名單</div>
+      <div class="bi-bar-chart" style="text-align:center;padding:30px;color:var(--text-muted);font-size:13px;">
+        ✅ 沒有需要補發的料項(所有發料進度都跟得上入庫進度)
+      </div>
+    `;
+  }
+
+  // 排序:先紅後黃,同等級內 gap 大的在前
+  allShortage.sort((a, b) => {
+    if (a.mat.shortage.level !== b.mat.shortage.level) {
+      return a.mat.shortage.level === 'warn' ? -1 : 1;
+    }
+    return b.mat.shortage.gap - a.mat.shortage.gap;
+  });
+
+  const totalCount = allShortage.length;
+  const warnCount = allShortage.filter(x => x.mat.shortage.level === 'warn').length;
+  const attnCount = totalCount - warnCount;
+
+  // 廠區聚合 — 哪個廠區缺料最嚴重
+  const byFactory = {};
+  allShortage.forEach(x => {
+    const fk = x.wo.factoryKey;
+    if (!byFactory[fk]) byFactory[fk] = { name: x.wo.factory, total: 0, warn: 0 };
+    byFactory[fk].total++;
+    if (x.mat.shortage.level === 'warn') byFactory[fk].warn++;
+  });
+  const factoryRanking = Object.values(byFactory).sort((a, b) => b.warn - a.warn || b.total - a.total);
+  const maxFac = Math.max(1, ...factoryRanking.map(f => f.total));
+  const factoryRows = factoryRanking.map(f => {
+    const p = (f.total / maxFac * 100).toFixed(1);
+    return `
+      <div class="bi-bar-row">
+        <span class="bi-bar-label">${escapeHtml(f.name)}</span>
+        <div class="bi-bar-track">
+          <div class="bi-bar-fill warn" style="width:${p}%"></div>
+        </div>
+        <span class="bi-bar-num" style="color:var(--warn-text);">🔴${f.warn}</span>
+        <span class="bi-bar-num" style="color:#b45309;">🟡${f.total - f.warn}</span>
+      </div>
+    `;
+  }).join('');
+
+  // 缺料明細表(前 50 筆)
+  const TOP_N = 50;
+  const top = allShortage.slice(0, TOP_N);
+  const tableRows = top.map(({ wo, mat }) => {
+    const sh = mat.shortage;
+    const levelClass = sh.level === 'warn' ? 'shortage-warn-row' : 'shortage-attn-row';
+    return `
+      <div class="shortage-row ${levelClass}">
+        <span class="sh-level">${sh.level === 'warn' ? '🔴' : '🟡'}</span>
+        <span class="sh-wo" data-copy-single="${escapeAttr(wo.woNo)}" title="點擊複製">${escapeHtml(wo.woNo)}</span>
+        <span class="sh-factory">${escapeHtml(wo.factory)}</span>
+        <span class="sh-mat-no" data-copy-single="${escapeAttr(mat.matCode)}" title="點擊複製">${escapeHtml(mat.matCode)}</span>
+        <span class="sh-mat-name" title="${escapeAttr(mat.matName + ' / ' + mat.matSpec)}">${escapeHtml(mat.matName)}</span>
+        <span class="sh-progress"><span style="color:var(--text-muted);">入庫 ${wo.kjPct}% → 發料</span> <strong>${sh.issuePct}%</strong></span>
+        <span class="sh-gap">差 ${sh.gap}%</span>
+        <span class="sh-refill">補 <strong>${fmtNum(sh.needRefill)}</strong> ${escapeHtml(mat.matUnit || '')}</span>
+      </div>
+    `;
+  }).join('');
+
+  return `
+    <div class="bi-section-title">⚠️ 缺料補發優先名單</div>
+
+    <div class="bi-grid cols-3" style="grid-template-columns:repeat(3, 1fr);">
+      <div class="bi-card has-warning">
+        <div class="bi-card-title"><span>🔴 嚴重缺料</span></div>
+        <div class="bi-card-total" style="color:var(--warn-text);">${warnCount}<span class="unit">項</span></div>
+        <div style="font-size:11px;color:var(--text-muted);">發料進度落後入庫 30% 以上</div>
+      </div>
+      <div class="bi-card">
+        <div class="bi-card-title"><span>🟡 輕度缺料</span></div>
+        <div class="bi-card-total" style="color:#b45309;">${attnCount}<span class="unit">項</span></div>
+        <div style="font-size:11px;color:var(--text-muted);">發料進度落後入庫 10-30%</div>
+      </div>
+      <div class="bi-card">
+        <div class="bi-card-title"><span>📊 影響工單</span></div>
+        <div class="bi-card-total">${wos.filter(w => w.hasShortage).length}<span class="unit">張</span></div>
+        <div style="font-size:11px;color:var(--text-muted);">入庫 ≥80% 但有料項漏發</div>
+      </div>
+    </div>
+
+    <div class="bi-section-title" style="margin-top:18px;">🏭 各廠區缺料分布</div>
+    <div class="bi-bar-chart">
+      <div class="bi-bar-row" style="grid-template-columns:130px 1fr auto auto;font-size:11px;color:var(--text-muted);font-weight:700;border-bottom:1px solid var(--border);padding-bottom:4px;margin-bottom:4px;">
+        <span></span><span></span>
+        <span style="text-align:right;">嚴重</span>
+        <span style="text-align:right;">輕度</span>
+      </div>
+      ${factoryRows.replace(/grid-template-columns:130px 1fr auto;/g, 'grid-template-columns:130px 1fr 36px 36px;') ||
+        '<div style="color:var(--text-muted);font-size:12px;">無資料</div>'}
+    </div>
+
+    <div class="bi-section-title" style="margin-top:18px;">📋 缺料明細(依嚴重度排序,顯示前 ${Math.min(TOP_N, totalCount)} 筆 / 共 ${totalCount} 筆)</div>
+    <div class="shortage-table">
+      <div class="shortage-row shortage-header">
+        <span class="sh-level"></span>
+        <span class="sh-wo">工單號</span>
+        <span class="sh-factory">廠區</span>
+        <span class="sh-mat-no">料號</span>
+        <span class="sh-mat-name">品名</span>
+        <span class="sh-progress">進度</span>
+        <span class="sh-gap">差距</span>
+        <span class="sh-refill">建議補發</span>
+      </div>
+      ${tableRows}
+    </div>
+    ${totalCount > TOP_N ? `<div style="text-align:center;font-size:11px;color:var(--text-muted);margin-top:6px;">⬆️ 還有 ${totalCount - TOP_N} 筆,可從 Excel 匯出查看完整清單</div>` : ''}
+  `;
+}
+
+function renderDonutCard(g) {
+  const slices = [
+    { label: '🆕 新單', value: g.newWO, color: '#10b981' },
+    { label: '🟡 注意', value: g.attn, color: '#f59e0b' },
+    { label: '🔴 警示', value: g.warn, color: '#dc2626' },
+    { label: '📋 一般', value: Math.max(0, g.total - g.newWO - g.attn - g.warn), color: '#94a3b8' },
+  ];
+  const totalSlice = slices.reduce((s, x) => s + x.value, 0) || 1;
+  let cumulative = 0;
+  const radius = 28;
+  const circumference = 2 * Math.PI * radius;
+  const arcs = slices.map(s => {
+    if (s.value === 0) return '';
+    const dash = (s.value / totalSlice) * circumference;
+    const offset = -cumulative;
+    cumulative += dash;
+    return `<circle cx="32" cy="32" r="${radius}" fill="none" stroke="${s.color}" stroke-width="8" stroke-dasharray="${dash} ${circumference - dash}" stroke-dashoffset="${offset}" transform="rotate(-90 32 32)"/>`;
+  }).join('');
+
+  const legend = slices.map(s => `
+    <div class="legend-item">
+      <span class="dot" style="background:${s.color}"></span>
+      <span class="label">${s.label}</span>
+      <span class="num">${s.value}</span>
+    </div>
+  `).join('');
+
+  const kj = pct(g.totalDone, g.totalProd);
+  const rateColor = kj >= 80 ? 'var(--done-text)' : (kj >= 50 ? '#b45309' : 'var(--warn-text)');
+  const hasWarn = g.warn > 0;
+
+  return `
+    <div class="bi-card ${hasWarn ? 'has-warning' : ''}">
+      <div class="bi-card-title">
+        <span>${escapeHtml(g.name)}</span>
+        <span class="bi-card-tag prod">生產</span>
+      </div>
+      <div style="display:flex;align-items:baseline;gap:8px;justify-content:space-between;margin:4px 0 8px;">
+        <div class="bi-card-total" style="margin:0;">${g.total}<span class="unit">張</span></div>
+        <div style="text-align:right;">
+          <div style="font-size:18px;font-weight:700;color:${rateColor};font-variant-numeric:tabular-nums;line-height:1;">${kj}%</div>
+          <div style="font-size:10px;color:var(--text-muted);margin-top:2px;">入庫進度</div>
+        </div>
+      </div>
+      <div class="bi-donut-wrap">
+        <svg class="bi-donut" viewBox="0 0 64 64">
+          <circle cx="32" cy="32" r="${radius}" fill="none" stroke="var(--surface-2)" stroke-width="8"/>
+          ${arcs}
+        </svg>
+        <div class="bi-donut-legend">${legend}</div>
+      </div>
+    </div>
+  `;
+}
+
+// ===== 互動處理 =====
+function attachToggleHandlers() {
+  document.querySelectorAll('[data-toggle]').forEach(el => {
+    el.onclick = e => {
+      if (e.target.closest('.copy-btn')) return;
+      el.classList.toggle('open');
+      el.parentElement.classList.toggle('open');
+    };
+  });
+}
+
+function attachWoExpandHandlers() {
+  document.querySelectorAll('.wo-row[data-wo]').forEach(row => {
+    row.onclick = e => {
+      if (e.target.closest('[data-copy-single]') || e.target.closest('.copy-btn')) return;
+      row.classList.toggle('expanded');
+    };
+  });
+}
+
+function attachCopyHandlers() {
+  document.querySelectorAll('[data-copy]').forEach(btn => {
+    btn.onclick = e => {
+      e.stopPropagation();
+      const text = btn.dataset.copy.replace(/&#10;/g, '\n').replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&');
+      copyToClipboard(text);
+      const original = btn.textContent;
+      btn.textContent = '✓ 已複製';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1500);
+      showToast(`已複製 ${text.split('\n').filter(Boolean).length} 個工單號`);
+    };
+  });
+  document.querySelectorAll('[data-copy-single]').forEach(el => {
+    el.onclick = e => {
+      e.stopPropagation();
+      const text = el.dataset.copySingle.replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&');
+      copyToClipboard(text);
+      el.classList.add('copied');
+      setTimeout(() => el.classList.remove('copied'), 1500);
+      showToast('已複製: ' + text);
+    };
+  });
+}
+
+function copyToClipboard(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
+  } else { fallbackCopy(text); }
+}
+function fallbackCopy(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.style.position = 'fixed'; ta.style.left = '-9999px';
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); } catch(e) {}
+  document.body.removeChild(ta);
+}
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+document.querySelectorAll('.pill').forEach(p => {
+  p.onclick = () => {
+    document.querySelectorAll('.pill').forEach(x => x.classList.remove('active'));
+    p.classList.add('active');
+    currentFilter = p.dataset.filter;
+    render();
+  };
+});
+document.getElementById('search').oninput = e => { searchQuery = e.target.value; render(); };
+
+// 月份下拉(頂部 + 工具列兩個,共用 currentMonth state)
+const monthSelectIds = ['monthSelect', 'monthSelectToolbar'];
+monthSelectIds.forEach(id => {
+  const el = document.getElementById(id);
+  if (el) {
+    el.onchange = e => {
+      currentMonth = e.target.value;
+      render();
+    };
+  }
+});
+
+// 動態填入月份選項(基於當前 workOrders 的所有月份,顯示「YYYY/M月份 (筆數)」)
+function updateMonthSelect() {
+  const selectors = monthSelectIds.map(id => document.getElementById(id)).filter(Boolean);
+  if (selectors.length === 0) return;
+  // 統計每個月份的工單數
+  const monthCount = {};
+  workOrders.forEach(w => {
+    const d = w.docDateStr || '';
+    const m = d.match(/^(\d{4})-(\d{2})/);
+    const key = m ? (m[1] + '-' + m[2]) : '__nodate__';
+    monthCount[key] = (monthCount[key] || 0) + 1;
+  });
+  // 排序:舊月份在上,沒日期最後
+  const monthKeys = Object.keys(monthCount).sort((a, b) => {
+    if (a === '__nodate__') return 1;
+    if (b === '__nodate__') return -1;
+    return a.localeCompare(b);
+  });
+  const total = workOrders.length;
+  let html = `<option value="all">📅 全部月份 (${total})</option>`;
+  monthKeys.forEach(mk => {
+    const count = monthCount[mk];
+    let label;
+    if (mk === '__nodate__') label = '未指定月份';
+    else {
+      const [y, m] = mk.split('-');
+      label = y + '/' + parseInt(m, 10) + '月份';
+    }
+    html += `<option value="${mk}">${label} (${count})</option>`;
+  });
+  // 如果當前選的月份在新資料裡不存在了,reset 回 all
+  if (currentMonth !== 'all' && !monthCount[currentMonth]) {
+    currentMonth = 'all';
+  }
+  // 兩個下拉同步
+  selectors.forEach(sel => {
+    sel.innerHTML = html;
+    sel.value = currentMonth;
+    sel.classList.toggle('active', currentMonth !== 'all');
+    if (sel.id === 'monthSelect') {
+      // 頂部那個 — 沒資料時隱藏
+      sel.style.display = workOrders.length > 0 ? '' : 'none';
+    }
+  });
+}
+
+// ===== 月份彙總報告下載 =====
+function downloadMonthReport() {
+  if (workOrders.length === 0) { showToast('沒有資料可下載'); return; }
+
+  // 收集所有有資料的月份
+  const monthCount = {};
+  workOrders.forEach(w => {
+    const d = w.docDateStr || '';
+    const m = d.match(/^(\d{4})-(\d{2})/);
+    const key = m ? (m[1] + '-' + m[2]) : null;
+    if (key) monthCount[key] = (monthCount[key] || 0) + 1;
+  });
+  const monthKeys = Object.keys(monthCount).sort();
+  if (monthKeys.length === 0) {
+    showToast('沒有可彙總的月份');
+    return;
+  }
+
+  // 用 prompt 讓使用者選月份(預設用當前下拉選的,沒選就用最近一個月)
+  let targetMonth = currentMonth !== 'all' && monthCount[currentMonth] ? currentMonth : monthKeys[monthKeys.length - 1];
+
+  // 顯示月份選項
+  const promptMsg = '請選擇要彙總的月份(輸入編號):\n\n' +
+    monthKeys.map((mk, i) => {
+      const [y, m] = mk.split('-');
+      return `  ${i + 1}. ${y}/${parseInt(m, 10)}月份 (${monthCount[mk]} 張)`;
+    }).join('\n') +
+    `\n\n預設:${targetMonth.split('-')[0]}/${parseInt(targetMonth.split('-')[1], 10)}月份`;
+
+  const input = prompt(promptMsg, monthKeys.indexOf(targetMonth) + 1);
+  if (input === null) return;  // 取消
+  const idx = parseInt(input, 10) - 1;
+  if (!isNaN(idx) && idx >= 0 && idx < monthKeys.length) {
+    targetMonth = monthKeys[idx];
+  }
+
+  buildMonthReport(targetMonth);
+}
+
+function buildMonthReport(monthKey) {
+  const [y, m] = monthKey.split('-');
+  const monthLabel = `${y}/${parseInt(m, 10)}月份`;
+
+  // 篩出該月份的工單
+  const monthWOs = workOrders.filter(w => {
+    const d = w.docDateStr || '';
+    const mt = d.match(/^(\d{4})-(\d{2})/);
+    return mt && (mt[1] + '-' + mt[2]) === monthKey;
+  });
+
+  if (monthWOs.length === 0) {
+    showToast('該月份沒有工單');
+    return;
+  }
+
+  // 計算每張工單的未發料項
+  monthWOs.forEach(w => {
+    w._undelivered = w.materials.filter(mat => mat.shouldIssue > 0 && mat.issued === 0);
+  });
+
+  const wb = XLSX.utils.book_new();
+
+  // === 1. 彙總總表 ===
+  const summaryAOA = [
+    [`${y} 年 ${parseInt(m, 10)} 月份 各廠未完工工單彙總`],
+    [`產生時間:${new Date().toLocaleString('zh-TW')} | 分析日期:${analysisDate}`],
+    [],
+    ['廠區', '未完工總數', '入庫<80%', '80-99%', '≥100%', '有缺料工單', '🔴嚴重缺料項', '🟡輕度缺料項', '未發料項', '佔比'],
+  ];
+
+  const factoryStats = {};
+  FACTORY_ORDER.forEach(fk => {
+    if (fk === 'unknown') return;
+    factoryStats[fk] = {
+      name: FACTORY_LABELS[fk],
+      wo_count: 0, kj_low: 0, kj_high: 0, kj_full: 0,
+      shortage_wo: 0, sh_warn: 0, sh_attn: 0, undelivered: 0,
+    };
+  });
+
+  monthWOs.forEach(w => {
+    const s = factoryStats[w.factoryKey];
+    if (!s) return;
+    s.wo_count++;
+    if (w.kjPct < 80) s.kj_low++;
+    else if (w.kjPct < 100) s.kj_high++;
+    else s.kj_full++;
+    if (w.hasShortage) s.shortage_wo++;
+    s.sh_warn += w.shortageWarnCount;
+    s.sh_attn += w.shortageAttnCount;
+    s.undelivered += w._undelivered.length;
+  });
+
+  const totals = { wo_count: 0, kj_low: 0, kj_high: 0, kj_full: 0, shortage_wo: 0, sh_warn: 0, sh_attn: 0, undelivered: 0 };
+  FACTORY_ORDER.forEach(fk => {
+    const s = factoryStats[fk];
+    if (!s || s.wo_count === 0) return;
+    const pctStr = (s.wo_count / monthWOs.length * 100).toFixed(1) + '%';
+    summaryAOA.push([
+      s.name, s.wo_count, s.kj_low, s.kj_high, s.kj_full,
+      s.shortage_wo, s.sh_warn, s.sh_attn, s.undelivered, pctStr
+    ]);
+    Object.keys(totals).forEach(k => totals[k] += s[k]);
+  });
+  summaryAOA.push([
+    '合計', totals.wo_count, totals.kj_low, totals.kj_high, totals.kj_full,
+    totals.shortage_wo, totals.sh_warn, totals.sh_attn, totals.undelivered, '100%'
+  ]);
+  summaryAOA.push([]);
+  summaryAOA.push(['【欄位說明】']);
+  summaryAOA.push(['未完工總數:該廠該月份未從 ERP 消失的工單張數']);
+  summaryAOA.push(['入庫進度區間:K/J = 已入庫合格量 / 生產數量']);
+  summaryAOA.push(['缺料判定:工單入庫進度 ≥ 80% 後檢查料項發料狀況']);
+  summaryAOA.push(['🔴 嚴重缺料:某料項發料進度落後入庫進度 30% 以上']);
+  summaryAOA.push(['🟡 輕度缺料:落後 10%-30%']);
+  summaryAOA.push(['未發料項:已發數量 = 0(完全未發)且應發數量 > 0 的料項']);
+
+  const ws1 = XLSX.utils.aoa_to_sheet(summaryAOA);
+  ws1['!cols'] = [{wch:16},{wch:12},{wch:12},{wch:12},{wch:12},{wch:14},{wch:14},{wch:14},{wch:14},{wch:10}];
+  ws1['!merges'] = [
+    { s: { r: 0, c: 0 }, e: { r: 0, c: 9 } },
+    { s: { r: 1, c: 0 }, e: { r: 1, c: 9 } },
+  ];
+  XLSX.utils.book_append_sheet(wb, ws1, '彙總總表');
+
+  // === 2. 缺料工單明細 ===
+  const shortageRows = [];
+  monthWOs.forEach(w => {
+    if (!w.hasShortage) return;
+    w.materials.forEach(mat => {
+      if (!mat.shortage) return;
+      shortageRows.push({
+        '嚴重度': mat.shortage.level === 'warn' ? '🔴 嚴重' : '🟡 輕度',
+        '_lv': mat.shortage.level,
+        '廠區': w.factory,
+        '工單號': w.woNo,
+        '單據日期': w.docDateStr,
+        '生管': w.pmName,
+        '生產品名': w.productSpec,
+        '生產規格': w.productDesc,
+        '入庫進度%': w.kjPct,
+        '料號': mat.matCode,
+        '料項品名': mat.matName,
+        '料項規格': mat.matSpec,
+        '應發': mat.shouldIssue,
+        '已發': mat.issued,
+        '料項發料%': mat.shortage.issuePct,
+        '落後%': mat.shortage.gap,
+        '建議補發': mat.shortage.needRefill,
+        '單位': mat.matUnit,
+      });
+    });
+  });
+  shortageRows.sort((a, b) => {
+    if (a._lv !== b._lv) return a._lv === 'warn' ? -1 : 1;
+    return b['落後%'] - a['落後%'];
+  });
+  shortageRows.forEach(r => delete r._lv);
+  if (shortageRows.length > 0) {
+    const ws2 = XLSX.utils.json_to_sheet(shortageRows);
+    ws2['!cols'] = [
+      {wch:10},{wch:14},{wch:22},{wch:12},{wch:10},{wch:30},{wch:30},{wch:10},
+      {wch:22},{wch:30},{wch:30},{wch:10},{wch:10},{wch:12},{wch:10},{wch:14},{wch:8}
+    ];
+    XLSX.utils.book_append_sheet(wb, ws2, '缺料工單明細');
+  }
+
+  // === 3. 未發料項清單 ===
+  const undeliveredRows = [];
+  monthWOs.forEach(w => {
+    w._undelivered.forEach(mat => {
+      let note;
+      if (w.kjPct >= 100) note = '⚠️ 工單已超產但完全沒發此料';
+      else if (w.kjPct >= 80) note = '⚠️ 工單已快做完但完全沒發此料';
+      else if (w.kjPct >= 30) note = '生產中';
+      else note = '剛開立';
+      undeliveredRows.push({
+        '廠區': w.factory,
+        '工單號': w.woNo,
+        '單據日期': w.docDateStr,
+        '生管': w.pmName,
+        '入庫進度%': w.kjPct,
+        '生產品名': w.productSpec,
+        '料號': mat.matCode,
+        '料項品名': mat.matName,
+        '應發數量': mat.shouldIssue,
+        '單位': mat.matUnit,
+        '備註': note,
+      });
+    });
+  });
+  undeliveredRows.sort((a, b) => b['入庫進度%'] - a['入庫進度%']);
+  if (undeliveredRows.length > 0) {
+    const ws3 = XLSX.utils.json_to_sheet(undeliveredRows);
+    ws3['!cols'] = [
+      {wch:14},{wch:22},{wch:12},{wch:10},{wch:10},{wch:30},{wch:22},{wch:30},{wch:12},{wch:8},{wch:30}
+    ];
+    XLSX.utils.book_append_sheet(wb, ws3, '未發料項清單');
+  }
+
+  // === 4. 各廠工單清單 ===
+  FACTORY_ORDER.forEach(fk => {
+    const fac = FACTORY_LABELS[fk];
+    if (!fac || fk === 'unknown') return;
+    const wos = monthWOs.filter(w => w.factoryKey === fk);
+    if (wos.length === 0) return;
+    // 排序:有缺料先、嚴重在前、入庫高的在前
+    wos.sort((a, b) => {
+      if (a.shortageWarnCount !== b.shortageWarnCount) return b.shortageWarnCount - a.shortageWarnCount;
+      if (a.shortageAttnCount !== b.shortageAttnCount) return b.shortageAttnCount - a.shortageAttnCount;
+      return b.kjPct - a.kjPct;
+    });
+    const facRows = wos.map(w => ({
+      '工單號': w.woNo,
+      '單據日期': w.docDateStr,
+      '生管': w.pmName,
+      '工單類別': w.docName,
+      '生產品名': w.productSpec,
+      '生產數量': w.productionQty,
+      '已入庫': w.completedQty,
+      '入庫進度%': w.kjPct,
+      '料項數': w.materialCount,
+      '🔴嚴重': w.shortageWarnCount,
+      '🟡輕度': w.shortageAttnCount,
+      '未發料項': w._undelivered.length,
+    }));
+    const wsf = XLSX.utils.json_to_sheet(facRows);
+    wsf['!cols'] = [
+      {wch:22},{wch:12},{wch:10},{wch:28},{wch:30},{wch:12},{wch:12},{wch:10},{wch:8},{wch:8},{wch:8},{wch:10}
+    ];
+    XLSX.utils.book_append_sheet(wb, wsf, fac.replace(/\//g, '-').slice(0, 31));
+  });
+
+  const filename = `${y}年${parseInt(m, 10)}月份_各廠工單彙總報告_${fmtDate(new Date())}.xlsx`;
+  XLSX.writeFile(wb, filename);
+  showToast(`${monthLabel} 彙總報告已下載`);
+}
+
+document.getElementById('downloadMonthReportBtn').onclick = downloadMonthReport;
+
+
+// ===== 匯出唯讀版 HTML =====
+function exportReadonlyHTML() {
+  if (workOrders.length === 0) { showToast('沒有資料可匯出'); return; }
+  const todayStr = analysisDate || fmtDate(new Date());
+
+  // 動態組出 HTML 標籤片段 — source code 中刻意不出現完整字面避免 parser 誤判
+  const SO = '<' + 'script';
+  const SC = '<' + '/' + 'script' + '>';
+
+  // 取得當前頁面完整 HTML
+  const fullHTML = document.documentElement.outerHTML;
+
+  // 把資料序列化(用 JSON.stringify 安全處理特殊字元)
+  // 同時把 < 替換成 \u003c 避免 parser 誤判
+  const dataPayload = JSON.stringify({
+    workOrders,
+    completedWO,
+    analysisDate,
+    exportedAt: new Date().toISOString(),
+  }).replace(/</g, '\\u003c');
+
+  const HE = '<' + '/' + 'head' + '>';
+  const BE = '<' + '/' + 'body' + '>';
+
+  // 注入到 head 的 CSS(讓 hidden 元素一開始就不顯示,避免閃爍)
+  const STO = '<' + 'style';
+  const STC = '<' + '/' + 'style' + '>';
+  const readonlyInit =
+    '\n' + STO + ' id="readonly-style">\n' +
+    '  #toggleUpload, #topDownloadBtn, #uploadZone, #downloadBtn, #downloadMonthReportBtn,\n' +
+    '  #exportReadonlyBtn, #exportMobileBtn, #welcome, #pwdModal { display: none !important; }\n' +
+    STC + '\n';
+
+  // readonly 資料 + mode 放在 body 開頭(<body> 之後,主腳本之前)
+  const readonlyDataScript =
+    '\n' + SO + ' id="readonly-data">\n' +
+    'window.__READONLY_DATA__ = ' + dataPayload + ';\n' +
+    'window.__READONLY_MODE__ = true;\n' +
+    SC + '\n';
+
+  let modified = fullHTML;
+  const headIdx = modified.lastIndexOf(HE);
+  if (headIdx !== -1) {
+    modified = modified.slice(0, headIdx) + readonlyInit + modified.slice(headIdx);
+  }
+
+  // 在 <body> 開啟標籤後立刻插入 readonlyDataScript
+  const bodyOpenRegex = /<body[^>]*>/i;
+  const bodyOpenMatch = modified.match(bodyOpenRegex);
+  if (bodyOpenMatch) {
+    const bodyOpenEnd = bodyOpenMatch.index + bodyOpenMatch[0].length;
+    modified = modified.slice(0, bodyOpenEnd) + readonlyDataScript + modified.slice(bodyOpenEnd);
+  }
+
+  modified = modified.replace(
+    /<title>[^<]*<\/title>/,
+    '<title>工單發料進度追蹤 (唯讀版) - ' + todayStr + '</title>'
+  );
+
+  // 觸發下載
+  const blob = new Blob([modified], { type: 'text/html;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = '工單發料進度_唯讀版_' + todayStr + '.html';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  showToast('唯讀版 HTML 已匯出,可直接傳給對方');
+}
+
+document.getElementById('exportReadonlyBtn').onclick = exportReadonlyHTML;
+
+// ===== 手機極簡版匯出(純 HTML+CSS+SVG,零 JavaScript) =====
+function exportMobileHTML() {
+  if (workOrders.length === 0) { showToast('沒有資料可匯出'); return; }
+  const todayStr = analysisDate || fmtDate(new Date());
+
+  // 計算統計
+  const total = workOrders.length;
+  const newCount = workOrders.filter(w => w.isNew).length;
+  const attnCount = workOrders.filter(w => w.isAttn).length;
+  const warnCount = workOrders.filter(w => w.isWarn).length;
+  const doneCount = completedWO.length;
+  let totalProd = 0, totalDone = 0, totalIss = 0, totalShould = 0;
+  workOrders.forEach(w => {
+    totalProd += w.productionQty; totalDone += w.completedQty;
+    totalIss += w.totalIssued; totalShould += w.totalShould;
+  });
+  const avgKJ = pct(totalDone, totalProd);
+  const avgST = pct(totalIss, totalShould);
+
+  // 各廠區分組
+  const groups = {};
+  FACTORY_ORDER.forEach(k => {
+    groups[k] = {
+      name: FACTORY_LABELS[k], total: 0, newWO: 0, attn: 0, warn: 0, done: 0,
+      totalProd: 0, totalDone: 0,
+    };
+  });
+  workOrders.forEach(w => {
+    const k = w.factoryKey;
+    if (!groups[k]) return;
+    groups[k].total++;
+    if (w.isNew) groups[k].newWO++;
+    if (w.isAttn) groups[k].attn++;
+    if (w.isWarn) groups[k].warn++;
+    groups[k].totalProd += w.productionQty;
+    groups[k].totalDone += w.completedQty;
+  });
+  completedWO.forEach(d => {
+    if (groups[d.factoryKey]) groups[d.factoryKey].done++;
+  });
+
+  // 圓餅圖 SVG
+  function makeDonut(g) {
+    const slices = [
+      { value: g.newWO, color: '#10b981' },
+      { value: g.attn, color: '#f59e0b' },
+      { value: g.warn, color: '#dc2626' },
+      { value: Math.max(0, g.total - g.newWO - g.attn - g.warn), color: '#94a3b8' },
+    ];
+    const totalSlice = slices.reduce((s, x) => s + x.value, 0) || 1;
+    const radius = 28;
+    const circumference = 2 * Math.PI * radius;
+    let cumulative = 0;
+    let arcs = '';
+    slices.forEach(s => {
+      if (s.value === 0) return;
+      const dash = (s.value / totalSlice) * circumference;
+      const offset = -cumulative;
+      cumulative += dash;
+      arcs += `<circle cx="32" cy="32" r="${radius}" fill="none" stroke="${s.color}" stroke-width="8" stroke-dasharray="${dash} ${circumference - dash}" stroke-dashoffset="${offset}" transform="rotate(-90 32 32)"/>`;
+    });
+    return `<svg viewBox="0 0 64 64" width="64" height="64"><circle cx="32" cy="32" r="${radius}" fill="none" stroke="#f1f5f9" stroke-width="8"/>${arcs}</svg>`;
+  }
+
+  // 部門卡
+  const deptCards = FACTORY_ORDER
+    .map(k => groups[k])
+    .filter(g => g.name && g.total > 0)
+    .map(g => {
+      const kj = pct(g.totalDone, g.totalProd);
+      const rateColor = kj >= 80 ? '#7c3aed' : (kj >= 50 ? '#b45309' : '#b91c1c');
+      const cardBorder = g.warn > 0 ? '#fecaca' : '#e5e7eb';
+      return `
+<div style="background:#fff;border:1px solid ${cardBorder};border-radius:10px;padding:14px;margin-bottom:10px;">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+    <span style="font-size:14px;font-weight:600;color:#0f172a;">${g.name}</span>
+    <span style="font-size:10px;font-weight:700;padding:2px 6px;border-radius:3px;background:#dbeafe;color:#1e40af;">生產</span>
+  </div>
+  <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;">
+    <div style="font-size:24px;font-weight:700;color:#0f172a;">${g.total}<span style="font-size:11px;color:#64748b;font-weight:400;margin-left:3px;">張</span></div>
+    <div style="text-align:right;">
+      <div style="font-size:18px;font-weight:700;color:${rateColor};">${kj}%</div>
+      <div style="font-size:10px;color:#64748b;">入庫進度</div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px;">
+    ${makeDonut(g)}
+    <div style="flex:1;font-size:11px;line-height:1.7;">
+      <div style="display:flex;align-items:center;gap:5px;"><span style="width:8px;height:8px;border-radius:50%;background:#10b981;display:inline-block;"></span><span style="color:#64748b;flex:1;">🆕 新單</span><span style="font-weight:600;color:#0f172a;">${g.newWO}</span></div>
+      <div style="display:flex;align-items:center;gap:5px;"><span style="width:8px;height:8px;border-radius:50%;background:#f59e0b;display:inline-block;"></span><span style="color:#64748b;flex:1;">🟡 注意</span><span style="font-weight:600;color:#0f172a;">${g.attn}</span></div>
+      <div style="display:flex;align-items:center;gap:5px;"><span style="width:8px;height:8px;border-radius:50%;background:#dc2626;display:inline-block;"></span><span style="color:#64748b;flex:1;">🔴 警示</span><span style="font-weight:600;color:#0f172a;">${g.warn}</span></div>
+      <div style="display:flex;align-items:center;gap:5px;"><span style="width:8px;height:8px;border-radius:50%;background:#94a3b8;display:inline-block;"></span><span style="color:#64748b;flex:1;">✅ 完工</span><span style="font-weight:600;color:#0f172a;">${g.done}</span></div>
+    </div>
+  </div>
+</div>`;
+    }).join('');
+
+  // 部門排行(橫向長條)
+  const sortedGroups = FACTORY_ORDER.map(k => groups[k]).filter(g => g.name && g.total > 0).sort((a, b) => b.total - a.total);
+  const maxTotal = Math.max(1, ...sortedGroups.map(g => g.total));
+  const barRows = sortedGroups.map(g => {
+    const p = (g.total / maxTotal * 100).toFixed(1);
+    const isWarn = g.warn / Math.max(1, g.total) > 0.5;
+    const fillColor = isWarn ? 'linear-gradient(90deg,#f87171,#dc2626)' : 'linear-gradient(90deg,#14b8a6,#0d9488)';
+    return `
+<div style="display:grid;grid-template-columns:80px 1fr 40px;gap:8px;align-items:center;padding:5px 0;font-size:12px;">
+  <span style="color:#0f172a;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${g.name}</span>
+  <div style="background:#f1f5f9;border-radius:4px;height:18px;overflow:hidden;">
+    <div style="height:100%;border-radius:4px;background:${fillColor};width:${p}%;"></div>
+  </div>
+  <span style="color:#0f172a;font-weight:700;text-align:right;">${g.total}</span>
+</div>`;
+  }).join('');
+
+  const exportedAt = new Date().toLocaleString('zh-TW');
+
+  // 完全獨立的 HTML(不依賴主工具)— 純 HTML + CSS,無 JavaScript
+  const html = `<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>工單發料進度看板 (手機版) - ${todayStr}</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "PingFang TC", sans-serif; background: #f8fafc; color: #0f172a; padding: 16px; line-height: 1.5; }
+h1 { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
+.badge { font-size: 11px; color: #0f766e; font-weight: 700; background: #ecfdf5; padding: 2px 8px; border-radius: 4px; display: inline-block; margin-left: 4px; vertical-align: middle; }
+.subtitle { font-size: 12px; color: #64748b; margin-bottom: 6px; }
+.export-info { font-size: 10px; color: #94a3b8; margin-bottom: 18px; }
+.section-title { font-size: 13px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.06em; margin: 18px 0 10px; padding-left: 10px; border-left: 3px solid #0d9488; }
+.stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px; }
+.stat-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px 12px; }
+.stat-label { font-size: 11px; color: #64748b; margin-bottom: 4px; }
+.stat-value { font-size: 22px; font-weight: 700; }
+.stat-value.green { color: #047857; }
+.stat-value.purple { color: #7c3aed; }
+.stat-value.amber { color: #b45309; }
+.stat-value.red { color: #b91c1c; }
+.bar-chart { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 14px; }
+` + '</' + 'style>' + `
+` + '</' + 'head>' + `
+<body>
+
+<h1>工單發料進度看板<span class="badge">手機版</span></h1>
+<div class="subtitle">分析日期 ${todayStr} · 共 ${total} 張未完工 · 本週新工單 ${newCount} · 本週完工 ${doneCount}</div>
+<div class="export-info">📤 匯出時間:${exportedAt}</div>
+
+<div class="section-title">📊 整體統計</div>
+<div class="stats-grid">
+  <div class="stat-card"><div class="stat-label">未完工總數</div><div class="stat-value">${total}</div></div>
+  <div class="stat-card"><div class="stat-label">🆕 本週新工單</div><div class="stat-value green">${newCount}</div></div>
+  <div class="stat-card"><div class="stat-label">✅ 本週完工</div><div class="stat-value purple">${doneCount}</div></div>
+  <div class="stat-card"><div class="stat-label">🟡 注意 (14天+)</div><div class="stat-value amber">${attnCount}</div></div>
+  <div class="stat-card"><div class="stat-label">🔴 警示 (30天+)</div><div class="stat-value red">${warnCount}</div></div>
+  <div class="stat-card"><div class="stat-label">入庫 / 發料</div><div class="stat-value" style="font-size:18px;">${avgKJ}% / ${avgST}%</div></div>
+</div>
+
+<div class="section-title">🏢 各廠區狀態</div>
+${deptCards}
+
+<div class="section-title">📈 各廠區排行</div>
+<div class="bar-chart">${barRows}</div>
+
+<div style="text-align:center;font-size:10px;color:#94a3b8;margin-top:24px;padding:12px;">
+  ─── 報告結束 ───<br>
+  本檔案為唯讀統計,如需詳細工單請洽承辦人
+</div>
+
+` + '</' + 'body>' + `
+` + '</' + 'html>';
+
+  // 觸發下載
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = '工單看板_手機版_' + todayStr + '.html';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  showToast('手機版已匯出,可傳給對方手機看');
+}
+
+document.getElementById('exportMobileBtn').onclick = exportMobileHTML;
+
+// ===== 初始化 =====
+(function init() {
+  // 唯讀模式 — 主腳本直接處理
+  if (window.__READONLY_MODE__) {
+    const d = window.__READONLY_DATA__;
+    if (!d) return;
+
+    function applyReadonlyMode() {
+      try {
+        // 載入資料
+        workOrders = d.workOrders || [];
+        completedWO = d.completedWO || [];
+        analysisDate = d.analysisDate || '';
+
+        // 隱藏所有上傳/編輯/密碼相關元素
+        const hideSelectors = ['#toggleUpload', '#topDownloadBtn', '#uploadZone', '#downloadBtn', '#downloadMonthReportBtn', '#exportReadonlyBtn', '#exportMobileBtn', '#welcome', '#pwdModal'];
+        for (const sel of hideSelectors) {
+          const el = document.querySelector(sel);
+          if (el) {
+            el.style.display = 'none';
+            el.style.visibility = 'hidden';
+          }
+        }
+
+        // 改標題
+        const h1 = document.querySelector('.title-area h1');
+        if (h1) {
+          while (h1.firstChild) h1.removeChild(h1.firstChild);
+          h1.appendChild(document.createTextNode('工單發料進度追蹤 '));
+          const badge = document.createElement('span');
+          badge.style.cssText = 'font-size:11px;color:#0f766e;font-weight:700;background:#ecfdf5;padding:2px 8px;border-radius:4px;display:inline-block;margin-left:4px;';
+          badge.textContent = '唯讀檢視版';
+          h1.appendChild(badge);
+        }
+
+        if (resultEl) resultEl.style.display = 'block';
+
+        // 加日期資訊
+        const header = document.querySelector('header');
+        if (header && !document.getElementById('readonlyDateInfo')) {
+          const info = document.createElement('div');
+          info.id = 'readonlyDateInfo';
+          info.style.cssText = 'font-size:11px;color:#999;text-align:right;line-height:1.5;flex-shrink:0;';
+          const snapshotDate = d.analysisDate || '';
+          const exportedAt = d.exportedAt ? new Date(d.exportedAt).toLocaleString('zh-TW') : '';
+          info.innerHTML = '📅 分析日期:' + snapshotDate + '<br>📤 匯出時間:' + exportedAt;
+          header.appendChild(info);
+        }
+
+        render();
+
+        if (typeof window.__switchTab === 'function') {
+          window.__switchTab('detail');
+        }
+      } catch (err) {
+        const errBox = document.createElement('div');
+        errBox.style.cssText = 'position:fixed;top:10px;left:10px;right:10px;background:#fee;border:2px solid #c00;padding:12px;font-size:11px;color:#900;z-index:9999;font-family:monospace;white-space:pre-wrap;border-radius:6px;';
+        errBox.textContent = '唯讀版錯誤(主腳本):' + (err && err.message ? err.message : err) + '\n\n' + (err && err.stack ? err.stack : '');
+        document.body.appendChild(errBox);
+      }
+    }
+
+    applyReadonlyMode();
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', applyReadonlyMode);
+    }
+    setTimeout(applyReadonlyMode, 100);
+    setTimeout(applyReadonlyMode, 500);
+    return;
+  }
+
+  if (loadFromStorage()) {
+    render();
+    resultEl.style.display = 'block';
+    welcomeEl.style.display = 'none';
+    uploadZone.classList.add('hidden');
+    toggleUploadBtn.style.display = 'inline-flex';
+    tryLoadFromCloud();
+  } else {
+    welcomeEl.style.display = 'block';
+    uploadZone.classList.remove('hidden');
+    tryLoadFromCloud();
+  }
+})();
+
+// ===== Tab 切換 =====
+const TAB_STORAGE_KEY = 'work_order_tracker_tab_v1';
+function initTabs() {
+  const tabBtns = document.querySelectorAll('.tab-btn');
+  const detailPane = document.getElementById('tabDetail');
+  const biPane = document.getElementById('tabBI');
+  if (!tabBtns.length || !detailPane || !biPane) return;
+
+  function activateTab(name) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+    detailPane.classList.toggle('active', name === 'detail');
+    biPane.classList.toggle('active', name === 'bi');
+    if (!window.__READONLY_MODE__) {
+      try { localStorage.setItem(TAB_STORAGE_KEY, name); } catch(e) {}
+    }
+  }
+
+  window.__switchTab = activateTab;
+
+  const defaultTab = 'detail';
+
+  if (window.__READONLY_MODE__) {
+    activateTab(defaultTab);
+  } else {
+    let savedTab = null;
+    try { savedTab = localStorage.getItem(TAB_STORAGE_KEY); } catch(e) {}
+    activateTab(savedTab || defaultTab);
+  }
+}
+initTabs();
+
+// 暴露給唯讀版/測試使用的入口
+window.__APP__ = {
+  setData: function(wos, done, dateStr) {
+    workOrders = wos;
+    completedWO = done;
+    analysisDate = dateStr;
+  },
+  setFilter: function(f) { currentFilter = f; },
+  setSearch: function(q) { searchQuery = q; },
+  render: render,
+  // 測試與除錯用 — 直接設 ERP 原始資料並觸發分析
+  setErpData: function(d) { erpData = d; analyzeBtn.disabled = false; },
+  setTrackData: function(d) { trackData = d; },
+  runAnalyze: function() { analyze(); },
+  getWorkOrders: function() { return workOrders; },
+  getCompletedWO: function() { return completedWO; },
+};
+
+</script>
+</body>
+</html>

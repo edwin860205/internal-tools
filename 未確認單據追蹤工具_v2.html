@@ -1,0 +1,2285 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>未確認單據追蹤工具</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg: #fafaf9;
+    --surface: #ffffff;
+    --surface-2: #f5f5f4;
+    --surface-3: #efedea;
+    --border: #e7e5e4;
+    --border-strong: #d6d3d1;
+    --text: #1c1917;
+    --text-muted: #78716c;
+    --text-dim: #a8a29e;
+    --accent: #0f766e;
+    --accent-hover: #115e59;
+    --new-bg: #ecfdf5;
+    --new-border: #6ee7b7;
+    --new-text: #047857;
+    --date-bg: #eff6ff;
+    --date-border: #93c5fd;
+    --date-text: #1d4ed8;
+    --warn-bg: #fef2f2;
+    --warn-border: #fca5a5;
+    --warn-text: #b91c1c;
+    --done-bg: #f5f3ff;
+    --done-border: #c4b5fd;
+    --done-text: #6d28d9;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    font-family: -apple-system, BlinkMacSystemFont, "Microsoft JhengHei", "Segoe UI", sans-serif;
+    background: var(--bg); color: var(--text);
+    font-size: 14px; line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .container { max-width: 1280px; margin: 0 auto; padding: 24px 32px 80px; }
+
+  header { margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+  .title-area h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; }
+  .sub { color: var(--text-muted); font-size: 13px; margin-top: 4px; }
+  .reupload-btn {
+    padding: 8px 14px; background: var(--surface);
+    border: 1px solid var(--border-strong); border-radius: 6px;
+    font-size: 13px; font-weight: 600; cursor: pointer; color: var(--text);
+    display: inline-flex; align-items: center; gap: 6px;
+    transition: all 0.15s; flex-shrink: 0;
+  }
+  .reupload-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  .upload-zone {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 20px; margin-bottom: 24px;
+    box-shadow: var(--shadow-sm);
+  }
+  .upload-zone.hidden { display: none; }
+  .upload-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 12px; align-items: end; }
+
+  /* 上傳教學摺疊區 */
+  .upload-help {
+    margin-bottom: 16px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface-2);
+    overflow: hidden;
+  }
+  .upload-help summary {
+    cursor: pointer;
+    padding: 10px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    user-select: none;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background 0.15s;
+  }
+  .upload-help summary::-webkit-details-marker { display: none; }
+  .upload-help summary::before {
+    content: '▶';
+    font-size: 9px;
+    color: var(--text-muted);
+    transition: transform 0.2s;
+    display: inline-block;
+  }
+  .upload-help[open] summary::before { transform: rotate(90deg); }
+  .upload-help summary:hover { background: var(--surface-3); }
+  .upload-help .help-hint {
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--text-dim);
+    margin-left: auto;
+  }
+  .upload-help .help-hint::before { content: '點擊展開'; }
+  .upload-help[open] .help-hint::before { content: '點擊收起'; }
+  .upload-help .upload-help-body {
+    padding: 4px 18px 16px 18px;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .help-section { display: flex; flex-direction: column; gap: 12px; padding-top: 14px; }
+  .help-step {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    font-size: 13px;
+    line-height: 1.55;
+  }
+  .help-step .step-num {
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    margin-top: 1px;
+  }
+  .help-step b { color: var(--text); display: block; margin-bottom: 2px; }
+  .help-step .help-desc {
+    display: block;
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.6;
+  }
+  .help-step .help-hint-text {
+    color: var(--accent);
+    font-style: italic;
+  }
+  .help-tip {
+    margin-top: 14px;
+    padding: 10px 12px;
+    background: var(--new-bg);
+    border: 1px solid var(--new-border);
+    border-radius: 6px;
+    font-size: 12px;
+    color: var(--new-text);
+    line-height: 1.6;
+  }
+  .help-tip b { color: var(--text); }
+  .file-input-wrap label {
+    display: block; font-size: 12px; font-weight: 600;
+    color: var(--text-muted); margin-bottom: 6px;
+    text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .file-input-wrap label .opt {
+    font-weight: 400; text-transform: none; letter-spacing: 0;
+    color: var(--text-dim); margin-left: 6px;
+  }
+  .file-btn {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    width: 100%; padding: 10px 14px; background: var(--surface-2);
+    border: 1px dashed var(--border-strong); border-radius: 6px;
+    cursor: pointer; font-size: 13px; color: var(--text-muted);
+    transition: all 0.15s; overflow: hidden;
+  }
+  .file-btn:hover { border-color: var(--accent); color: var(--accent); background: #fff; }
+  .file-btn.has-file { border-style: solid; border-color: var(--accent); background: #fff; color: var(--text); }
+  .file-btn .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .file-btn .icon { flex-shrink: 0; opacity: 0.6; }
+  input[type="file"] { display: none; }
+  .analyze-btn {
+    padding: 10px 20px; background: var(--accent); color: #fff;
+    border: none; border-radius: 6px; font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: background 0.15s; white-space: nowrap;
+  }
+  .analyze-btn:hover { background: var(--accent-hover); }
+  .analyze-btn:disabled { background: var(--text-dim); cursor: not-allowed; }
+
+  .stats { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin-bottom: 24px; }
+  .stat {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 14px 16px;
+  }
+  .stat .label {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--text-muted); font-weight: 600;
+  }
+  .stat .value {
+    font-size: 24px; font-weight: 700; margin-top: 4px;
+    letter-spacing: -0.02em; font-variant-numeric: tabular-nums;
+  }
+  .stat.new .value { color: var(--new-text); }
+  .stat.date .value { color: var(--date-text); }
+  .stat.warn .value { color: var(--warn-text); }
+  .stat.done .value { color: var(--done-text); }
+
+  .toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+
+  /* === BI 戰情看板 === */
+  .bi-dashboard { margin-bottom: 24px; }
+  .bi-section-title {
+    font-size: 13px; font-weight: 700; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.06em;
+    margin: 18px 0 10px; display: flex; align-items: center; gap: 8px;
+  }
+  .bi-section-title::before {
+    content: ''; display: inline-block;
+    width: 3px; height: 14px;
+    background: var(--accent); border-radius: 2px;
+  }
+  .bi-grid { display: grid; gap: 12px; }
+  .bi-grid.cols-2 { grid-template-columns: 1fr 1fr; }
+  .bi-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+  .bi-grid.cols-7 { grid-template-columns: repeat(4, 1fr); }
+  @media (min-width: 1100px) {
+    .bi-grid.cols-7 { grid-template-columns: repeat(7, 1fr); }
+  }
+
+  .bi-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px; transition: all 0.2s;
+  }
+  .bi-card.has-warning { border-color: var(--warn-border); }
+  .bi-card-title {
+    font-size: 12px; font-weight: 600; color: var(--text);
+    margin-bottom: 4px; display: flex;
+    justify-content: space-between; align-items: center; gap: 8px;
+  }
+  .bi-card-tag {
+    font-size: 10px; font-weight: 700;
+    padding: 2px 6px; border-radius: 3px; letter-spacing: 0.04em;
+  }
+  .bi-card-tag.admin { background: #fef3c7; color: #92400e; }
+  .bi-card-tag.prod { background: #dbeafe; color: #1e40af; }
+  .bi-card-total {
+    font-size: 22px; font-weight: 700; color: var(--text);
+    letter-spacing: -0.02em; font-variant-numeric: tabular-nums;
+    margin: 4px 0 8px; line-height: 1;
+  }
+  .bi-card-total .unit {
+    font-size: 11px; color: var(--text-muted);
+    font-weight: 400; margin-left: 3px;
+  }
+
+  /* 圓餅圖 */
+  .bi-donut-wrap { display: flex; align-items: center; gap: 10px; }
+  .bi-donut { width: 64px; height: 64px; flex-shrink: 0; }
+  .bi-donut-legend {
+    flex: 1; display: flex; flex-direction: column;
+    gap: 3px; font-size: 11px; min-width: 0;
+  }
+  .bi-donut-legend .legend-item {
+    display: flex; align-items: center; gap: 5px;
+    font-variant-numeric: tabular-nums;
+  }
+  .bi-donut-legend .dot {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  }
+  .bi-donut-legend .label {
+    color: var(--text-muted); flex: 1;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .bi-donut-legend .num { color: var(--text); font-weight: 600; }
+
+  /* 橫向長條圖 */
+  .bi-bar-chart {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px 18px;
+  }
+  .bi-bar-row {
+    display: grid; grid-template-columns: 130px 1fr auto;
+    gap: 10px; align-items: center; padding: 6px 0; font-size: 12px;
+  }
+  .bi-bar-label {
+    color: var(--text); font-weight: 500;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .bi-bar-track {
+    background: var(--surface-2); border-radius: 4px;
+    height: 18px; overflow: hidden; position: relative;
+  }
+  .bi-bar-fill {
+    height: 100%; border-radius: 4px;
+    background: linear-gradient(90deg, #14b8a6, #0d9488);
+    transition: width 0.5s;
+  }
+  .bi-bar-fill.warn { background: linear-gradient(90deg, #f87171, #dc2626); }
+  .bi-bar-fill.new { background: linear-gradient(90deg, #34d399, #10b981); }
+  .bi-bar-fill.done { background: linear-gradient(90deg, #a78bfa, #7c3aed); }
+  .bi-bar-num {
+    color: var(--text); font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    min-width: 36px; text-align: right;
+  }
+
+  /* === 手機版 BI === */
+  @media (max-width: 768px) {
+    .bi-grid.cols-2,
+    .bi-grid.cols-3,
+    .bi-grid.cols-7 { grid-template-columns: 1fr 1fr; }
+    .bi-bar-row { grid-template-columns: 90px 1fr auto; font-size: 11px; }
+  }
+
+  /* Tab 切換 */
+  .tab-bar {
+    display: flex;
+    gap: 4px;
+    border-bottom: 2px solid var(--border);
+    margin-bottom: 18px;
+  }
+  .tab-btn {
+    padding: 10px 18px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: inherit;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+  .tab-pane { display: none; }
+  .tab-pane.active { display: block; }
+  .search-box {
+    flex: 1; min-width: 220px; padding: 8px 12px;
+    border: 1px solid var(--border-strong); border-radius: 6px;
+    font-size: 13px; font-family: inherit; background: var(--surface);
+    outline: none; transition: border-color 0.15s;
+  }
+  .search-box:focus { border-color: var(--accent); }
+  .filter-pills { display: flex; gap: 6px; }
+  .pill {
+    padding: 6px 12px; background: var(--surface);
+    border: 1px solid var(--border-strong); border-radius: 999px;
+    font-size: 12px; cursor: pointer; color: var(--text-muted);
+    font-weight: 500; transition: all 0.15s;
+  }
+  .pill.active { background: var(--text); color: #fff; border-color: var(--text); }
+  .pill:hover:not(.active) { border-color: var(--text-muted); color: var(--text); }
+  .download-btn {
+    padding: 8px 14px; background: var(--surface);
+    border: 1px solid var(--border-strong); border-radius: 6px;
+    font-size: 12px; font-weight: 600; cursor: pointer; color: var(--text);
+    display: inline-flex; align-items: center; gap: 6px; transition: all 0.15s;
+  }
+  .download-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  .category {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; margin-bottom: 8px; overflow: hidden;
+  }
+  .category-header {
+    padding: 6px 18px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer; user-select: none;
+    background: var(--surface); transition: background 0.15s;
+    height: 36px; box-sizing: border-box;
+    min-width: 0;
+    flex-wrap: nowrap;
+  }
+  .category-header > .category-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .category-header:hover { background: var(--surface-2); }
+  .toggle-icon {
+    display: inline-flex; align-items: center; justify-content: center;
+    transition: transform 0.2s; color: var(--text-muted); font-size: 10px;
+  }
+  .category-header.open .toggle-icon { transform: rotate(90deg); }
+  .category-tag {
+    font-size: 11px; font-weight: 700; padding: 3px 8px;
+    border-radius: 4px; letter-spacing: 0.04em; text-align: center;
+  }
+  .tag-admin { background: #fef3c7; color: #92400e; }
+  .tag-prod { background: #dbeafe; color: #1e40af; }
+  .category-name { font-size: 14px; font-weight: 600; }
+
+  .num-badge {
+    display: inline-flex; align-items: center; gap: 3px;
+    font-size: 11px; padding: 1px 7px; border-radius: 4px;
+    font-weight: 600; min-width: 56px; justify-content: center;
+    font-variant-numeric: tabular-nums; line-height: 1.5;
+    height: 20px; box-sizing: border-box;
+  }
+  .num-badge .lbl { font-size: 10px; opacity: 0.75; font-weight: 500; line-height: 1; }
+  .num-badge.done { background: var(--done-bg); color: var(--done-text); border: 1px solid var(--done-border); }
+  .num-badge.new { background: var(--new-bg); color: var(--new-text); border: 1px solid var(--new-border); }
+  .num-badge.empty { background: transparent; border: 1px solid transparent; color: var(--text-dim); font-weight: 400; }
+  .total-count {
+    font-size: 13px; font-weight: 600; color: var(--text);
+    font-variant-numeric: tabular-nums; min-width: 56px; text-align: right;
+  }
+  .total-count .unit { font-size: 11px; color: var(--text-muted); font-weight: 400; margin-left: 2px; }
+
+  .copy-btn {
+    padding: 2px 9px; background: transparent;
+    border: 1px solid var(--border-strong); border-radius: 5px;
+    font-size: 11px; font-weight: 600; cursor: pointer;
+    color: var(--text-muted); transition: all 0.15s;
+    display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;
+    height: 22px; box-sizing: border-box;
+  }
+  .copy-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .copy-btn.copied { background: var(--new-text); color: #fff; border-color: var(--new-text); }
+
+  .category-body { max-height: 0; overflow: hidden; border-top: 0; padding: 0; margin: 0; }
+  .category.open .category-body { max-height: none; overflow: visible; border-top: 1px solid var(--border); }
+
+  .dept-group { border-bottom: 1px solid var(--border); margin: 0; padding: 0; }
+  .dept-group:last-child { border-bottom: none; }
+  .dept-header {
+    padding: 4px 18px 4px 40px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer; background: var(--surface-2); transition: background 0.15s;
+    height: 32px; box-sizing: border-box;
+    min-width: 0;
+    flex-wrap: nowrap;
+  }
+  .dept-header > .dept-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dept-header:hover { background: var(--surface-3); }
+  .dept-name { font-size: 13px; font-weight: 600; color: var(--text); margin: 0; }
+  .dept-body { max-height: 0; overflow: hidden; background: var(--surface); padding: 0; margin: 0; }
+  .dept-group.open .dept-body { max-height: none; overflow: visible; }
+
+  .owner-group { border-bottom: 1px solid var(--border); margin: 0; padding: 0; }
+  .owner-group:last-child { border-bottom: none; }
+  .owner-header {
+    padding: 3px 18px 3px 64px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer; background: #fcfbfa; transition: background 0.15s;
+    height: 30px; box-sizing: border-box;
+    min-width: 0;
+    flex-wrap: nowrap;
+  }
+  .owner-header > .owner-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .owner-header:hover { background: var(--surface-2); }
+  .owner-name { font-size: 12px; font-weight: 500; color: var(--text); margin: 0; }
+  .owner-body { max-height: 0; overflow: hidden; background: var(--surface); padding: 0; margin: 0; }
+  .owner-group.open .owner-body { max-height: none; overflow: visible; }
+
+  .row {
+    display: grid; grid-template-columns: auto 1fr 200px 90px 90px;
+    align-items: center; gap: 10px;
+    padding: 6px 18px 6px 88px;
+    border-bottom: 1px solid var(--border); font-size: 13px;
+  }
+  .row:last-child { border-bottom: none; }
+  .row:hover { background: #fcfcfb; }
+  .row .badges { display: flex; gap: 4px; min-width: 0; }
+  .row .doc-no {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12px; font-weight: 600; cursor: pointer; color: var(--text);
+    border-bottom: 1px dotted transparent; transition: border-color 0.15s;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .row .doc-no:hover { border-bottom-color: var(--accent); color: var(--accent); }
+  .row .doc-no.copied { color: var(--new-text); }
+  .row .doc-name { color: var(--text-muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .doc-owner {
+    color: var(--text); font-size: 12px; font-weight: 500;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .row .doc-date { color: var(--text-dim); font-size: 11px; font-variant-numeric: tabular-nums; text-align: right; }
+  .row.warn { background: linear-gradient(to right, var(--warn-bg) 0%, transparent 30%); }
+
+  .badge {
+    font-size: 10px; font-weight: 700; padding: 2px 5px;
+    border-radius: 3px; letter-spacing: 0.03em;
+  }
+  .badge.new { background: var(--new-bg); color: var(--new-text); }
+  .badge.date { background: var(--date-bg); color: var(--date-text); }
+  .badge.warn { background: var(--warn-bg); color: var(--warn-text); }
+
+  .empty { text-align: center; padding: 80px 20px; color: var(--text-muted); }
+  .empty .icon-big { font-size: 36px; margin-bottom: 12px; opacity: 0.4; }
+  .empty .title { font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+  .empty .desc { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+
+  .toast {
+    position: fixed; bottom: 24px; left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--text); color: #fff;
+    padding: 10px 18px; border-radius: 6px;
+    font-size: 13px; font-weight: 500;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    opacity: 0; transition: all 0.2s;
+    pointer-events: none; z-index: 1000;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* 密碼彈窗 */
+  .modal-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(28, 25, 23, 0.5);
+    backdrop-filter: blur(4px);
+    display: none; align-items: center; justify-content: center;
+    z-index: 2000; padding: 20px;
+  }
+  .modal-backdrop.show { display: flex; }
+  .modal {
+    background: var(--surface);
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+    padding: 28px;
+    width: 100%; max-width: 380px;
+    animation: modalIn 0.18s ease-out;
+  }
+  @keyframes modalIn {
+    from { opacity: 0; transform: scale(0.94); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  .modal-title {
+    font-size: 17px; font-weight: 700;
+    color: var(--text); margin-bottom: 6px;
+    letter-spacing: -0.01em;
+  }
+  .modal-desc {
+    font-size: 13px; color: var(--text-muted);
+    margin-bottom: 18px;
+  }
+  .pwd-input {
+    width: 100%; padding: 11px 14px;
+    border: 1.5px solid var(--border-strong);
+    border-radius: 8px;
+    font-size: 15px; font-family: inherit;
+    background: var(--surface);
+    outline: none;
+    transition: border-color 0.15s;
+    letter-spacing: 0.1em;
+  }
+  .pwd-input:focus { border-color: var(--accent); }
+  .pwd-input.error { border-color: var(--warn-text); }
+  .pwd-error {
+    font-size: 12px; color: var(--warn-text);
+    margin-top: 6px; min-height: 18px;
+    font-weight: 500;
+  }
+  .modal-buttons {
+    display: flex; gap: 8px; justify-content: flex-end;
+    margin-top: 14px;
+  }
+  .btn-cancel, .btn-confirm {
+    padding: 8px 18px;
+    border-radius: 6px;
+    font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: all 0.15s;
+    font-family: inherit;
+  }
+  .btn-cancel {
+    background: var(--surface);
+    color: var(--text-muted);
+    border: 1px solid var(--border-strong);
+  }
+  .btn-cancel:hover { color: var(--text); border-color: var(--text-muted); }
+  .btn-confirm {
+    background: var(--accent);
+    color: #fff;
+    border: 1px solid var(--accent);
+  }
+  .btn-confirm:hover { background: var(--accent-hover); }
+
+  .section-title {
+    font-size: 12px; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--text-muted);
+    font-weight: 700; margin: 24px 0 10px; padding-left: 4px;
+  }
+
+  .done-section {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; margin-bottom: 12px; overflow: hidden;
+  }
+  .done-header {
+    padding: 14px 18px; display: flex; align-items: center; gap: 12px;
+    cursor: pointer; background: var(--surface); transition: background 0.15s;
+  }
+  .done-header:hover { background: var(--surface-2); }
+  .done-section.open .done-header .toggle-icon { transform: rotate(90deg); }
+  .done-tag {
+    font-size: 11px; font-weight: 700; padding: 3px 10px;
+    border-radius: 4px; background: var(--done-bg);
+    color: var(--done-text); border: 1px solid var(--done-border);
+  }
+  .done-title { flex: 1; font-size: 14px; font-weight: 600; }
+  .done-body { display: none; border-top: 1px solid var(--border); }
+  .done-section.open .done-body { display: block; }
+  .done-row {
+    display: grid; grid-template-columns: auto 1fr 180px 200px 110px;
+    align-items: center; gap: 12px; padding: 9px 18px;
+    border-bottom: 1px solid var(--border); font-size: 13px;
+  }
+  .done-row:last-child { border-bottom: none; }
+  .done-row .doc-no {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12px; font-weight: 600; color: var(--text); cursor: pointer;
+  }
+
+  @media (max-width: 768px) {
+    .container { padding: 16px; }
+    .upload-row { grid-template-columns: 1fr; }
+    .stats { grid-template-columns: repeat(2, 1fr); }
+    .row { grid-template-columns: 1fr 80px; gap: 6px; padding-left: 50px; }
+    .row .doc-name, .row .doc-date, .row .badges { display: none; }
+    .category-header { grid-template-columns: 18px 1fr auto auto; }
+    .category-header .category-tag { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <div class="title-area">
+      <h1>未確認單據追蹤 <span style="font-size:11px;color:var(--text-dim);font-weight:400;letter-spacing:0;">v4.0</span></h1>
+      <p class="sub" id="subtitle" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <span id="subtitleText">尚未上傳資料</span>
+        <button id="legendBtn" type="button" style="background:transparent;border:1px solid var(--border-strong);border-radius:5px;padding:2px 9px;font-size:11px;color:var(--text-muted);cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:4px;height:22px;">📖 圖示說明</button>
+      </p>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <span id="syncStatus" style="font-size:11px;padding:3px 10px;border-radius:12px;background:#f1f5f9;color:#64748b;border:1px solid #e2e8f0;cursor:pointer;" title="點擊設定雲端同步" onclick="openSyncSettings()">☁️ 未設定雲端</span>
+      <button class="reupload-btn" id="toggleUpload" style="display:none;">🔄 重新上傳分析</button>
+    </div>
+  </header>
+
+  <!-- 雲端同步設定彈窗 -->
+  <div class="modal-backdrop" id="syncModal" style="display:none;">
+    <div class="modal" style="max-width:520px;">
+      <div class="modal-title">☁️ 雲端同步設定</div>
+      <div class="modal-desc">填入 Google Apps Script 部署後的網址，即可讓所有人看到同一份資料。</div>
+      <div style="margin:12px 0 6px;font-size:12px;font-weight:600;color:var(--text-muted);">Apps Script 網址</div>
+      <input type="text" id="syncUrlInput" style="width:100%;padding:8px 10px;border:1px solid var(--border-strong);border-radius:6px;font-size:12px;font-family:monospace;" placeholder="https://script.google.com/macros/s/xxxxx/exec">
+      <div style="margin:12px 0 6px;font-size:12px;font-weight:600;color:var(--text-muted);">API 密碼</div>
+      <input type="password" id="syncSecretInput" style="width:100%;padding:8px 10px;border:1px solid var(--border-strong);border-radius:6px;font-size:12px;" placeholder="與 Apps Script 中設定的 API_SECRET 相同">
+      <div id="syncTestResult" style="margin-top:10px;font-size:12px;min-height:20px;"></div>
+      <div class="modal-buttons" style="margin-top:16px;">
+        <button class="btn-cancel" onclick="closeSyncSettings()">取消</button>
+        <button class="btn-confirm" style="background:#0f766e;" onclick="testAndSaveSyncSettings()">測試並儲存</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="upload-zone" id="uploadZone">
+    <details class="upload-help">
+      <summary>📖 上傳教學 <span class="help-hint"></span></summary>
+      <div class="upload-help-body">
+        <div class="help-section">
+          <div class="help-step">
+            <span class="step-num">1</span>
+            <div>
+              <b>從 ERP 匯出最新「未確認單據」清單</b>
+              <span class="help-desc">登入 ERP 系統 → 找到「未確認單據查詢」功能 → 匯出成 Excel(.xlsx)。檔名隨意,例如「4月份未過帳單據.xlsx」。</span>
+            </div>
+          </div>
+          <div class="help-step">
+            <span class="step-num">2</span>
+            <div>
+              <b>準備上次的「累積追蹤檔」</b>
+              <span class="help-desc">這是上次分析後從本工具下載的檔案,檔名類似「未確認單據_累積追蹤檔_2026-04-30.xlsx」。<br><span class="help-hint-text">第一次使用本工具時可以跳過這步,直接傳 ERP 檔即可。</span></span>
+            </div>
+          </div>
+          <div class="help-step">
+            <span class="step-num">3</span>
+            <div>
+              <b>分別上傳到下方兩個欄位</b>
+              <span class="help-desc">① 欄位放 ERP 匯出檔(必填)<br>② 欄位放上次的累積追蹤檔(第一次免填)</span>
+            </div>
+          </div>
+          <div class="help-step">
+            <span class="step-num">4</span>
+            <div>
+              <b>點「開始分析」</b>
+              <span class="help-desc">系統會比對兩份檔案,自動標記:<br>🆕 新單號 / 📅 新日期 / 🔴 警示 / ✅ 本週處理</span>
+            </div>
+          </div>
+          <div class="help-step">
+            <span class="step-num">5</span>
+            <div>
+              <b>分析完成後,記得下載新的累積追蹤檔</b>
+              <span class="help-desc">點右上角「⬇ 下載累積追蹤檔」,把新檔存到電腦,蓋掉舊檔。下次分析時上傳這個新檔即可。</span>
+            </div>
+          </div>
+        </div>
+        <div class="help-tip">
+          💡 <b>提醒:</b> ERP 檔每次匯出都是新的,但累積追蹤檔需要每週覆蓋更新。建議固定放在電腦的某個資料夾(如桌面或公司共享資料夾),避免找不到。
+        </div>
+      </div>
+    </details>
+    <div class="upload-row">
+      <div class="file-input-wrap">
+        <label>① ERP 最新匯出檔 <span class="opt">必填</span></label>
+        <label class="file-btn" id="erpBtn">
+          <span class="name" id="erpName">點擊選擇檔案 .xlsx</span>
+          <span class="icon">📎</span>
+          <input type="file" id="erpFile" accept=".xlsx,.xls">
+        </label>
+      </div>
+      <div class="file-input-wrap" id="trackFileWrap">
+        <label>② 上次的累積追蹤檔 <span class="opt">第一次使用免填</span></label>
+        <label class="file-btn" id="trackBtn">
+          <span class="name" id="trackName">點擊選擇檔案 .xlsx</span>
+          <span class="icon">📎</span>
+          <input type="file" id="trackFile" accept=".xlsx,.xls">
+        </label>
+      </div>
+      <div id="cloudTrackNotice" style="display:none;align-items:center;gap:8px;padding:10px 14px;background:#ecfdf5;border:1px solid #6ee7b7;border-radius:8px;font-size:12px;color:#047857;">
+        ☁️ <span>已連接雲端，歷史資料自動載入，不需要上傳累積追蹤檔</span>
+      </div>
+      <button class="analyze-btn" id="analyzeBtn" disabled>開始分析</button>
+    </div>
+  </div>
+
+  <div id="result" style="display:none;">
+    <div class="stats" id="stats"></div>
+
+    <!-- Tab 切換列 -->
+    <div class="tab-bar">
+      <button class="tab-btn active" data-tab="detail" onclick="window.__switchTab&&window.__switchTab('detail')">📋 明細列表</button>
+      <button class="tab-btn" data-tab="bi" onclick="window.__switchTab&&window.__switchTab('bi')">📊 戰情看板</button>
+    </div>
+
+    <!-- 明細頁面 -->
+    <div class="tab-pane active" id="tabDetail">
+      <div class="toolbar">
+        <input type="text" class="search-box" id="search" placeholder="搜尋單號 / 部門 / 程式 / 人員...">
+        <div class="filter-pills">
+          <span class="pill active" data-filter="all">全部</span>
+          <span class="pill" data-filter="new">🆕 新單號</span>
+          <span class="pill" data-filter="date">📅 新日期</span>
+          <span class="pill" data-filter="warn">🔴 警示</span>
+        </div>
+        <button class="download-btn" id="exportReadonlyBtn" style="border-color:var(--accent);color:var(--accent);">📤 匯出唯讀版 HTML</button>
+        <button class="download-btn" id="exportMobileBtn" style="border-color:#7c3aed;color:#7c3aed;">📱 匯出手機唯讀版</button>
+      </div>
+
+      <div id="doneSection"></div>
+
+      <div class="section-title">行政類</div>
+      <div id="adminList"></div>
+
+      <div class="section-title">生產類</div>
+      <div id="prodList"></div>
+    </div>
+
+    <!-- BI 看板頁面 -->
+    <div class="tab-pane" id="tabBI">
+      <div class="bi-dashboard" id="biDashboard"></div>
+    </div>
+  </div>
+
+  <div id="welcome" class="empty" style="display:none;">
+    <div class="icon-big">📋</div>
+    <div class="title">歡迎使用未確認單據追蹤工具</div>
+    <div class="desc">請在上方上傳 ERP 匯出檔開始追蹤</div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- 密碼彈窗 -->
+<div class="modal-backdrop" id="pwdModal">
+  <div class="modal">
+    <div class="modal-title">🔒 需要密碼</div>
+    <div class="modal-desc">請輸入密碼以開啟上傳分析功能</div>
+    <input type="password" id="pwdInput" class="pwd-input" placeholder="請輸入密碼" autocomplete="off">
+    <div id="pwdError" class="pwd-error"></div>
+    <div class="modal-buttons">
+      <button class="btn-cancel" id="pwdCancel">取消</button>
+      <button class="btn-confirm" id="pwdConfirm">確認</button>
+    </div>
+  </div>
+</div>
+
+<!-- 圖示說明彈窗 -->
+<div class="modal-backdrop" id="legendModal">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-title">📖 圖示說明</div>
+    <div class="modal-desc">每個圖示代表不同的判定維度,組合起來可以快速判斷單據狀態</div>
+
+    <div style="display:flex;flex-direction:column;gap:14px;margin-top:8px;">
+      <div style="display:flex;gap:12px;padding:10px 12px;background:var(--new-bg);border:1px solid var(--new-border);border-radius:6px;">
+        <div style="flex-shrink:0;font-weight:700;color:var(--new-text);font-size:13px;min-width:62px;">🆕 新單號</div>
+        <div style="font-size:12px;color:var(--text);line-height:1.55;">
+          <b>追蹤系統視角</b> — 這次 ERP 有、上次累積追蹤檔沒有<br>
+          <span style="color:var(--text-muted);">代表「我這週才開始追蹤這張單」,跟單據實際開立時間無關。</span>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:12px;padding:10px 12px;background:var(--date-bg);border:1px solid var(--date-border);border-radius:6px;">
+        <div style="flex-shrink:0;font-weight:700;color:var(--date-text);font-size:13px;min-width:62px;">📅 新日期</div>
+        <div style="font-size:12px;color:var(--text);line-height:1.55;">
+          <b>ERP 業務視角</b> — 單據日期在最近 7 天內<br>
+          <span style="color:var(--text-muted);">代表「業務剛開出來的單」,可能對方還沒時間處理,先別急著催。</span>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:12px;padding:10px 12px;background:var(--warn-bg);border:1px solid var(--warn-border);border-radius:6px;">
+        <div style="flex-shrink:0;font-weight:700;color:var(--warn-text);font-size:13px;min-width:62px;">🔴 警示</div>
+        <div style="font-size:12px;color:var(--text);line-height:1.55;">
+          <b>拖延警示</b> — 單據日期已超過 14 天還沒處理完<br>
+          <span style="color:var(--text-muted);">不論這張單是這週才追蹤的還是早就追蹤的,只要單據開立超過 14 天就會警示。</span>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:12px;padding:10px 12px;background:var(--done-bg);border:1px solid var(--done-border);border-radius:6px;">
+        <div style="flex-shrink:0;font-weight:700;color:var(--done-text);font-size:13px;min-width:62px;">✅ 已處理</div>
+        <div style="font-size:12px;color:var(--text);line-height:1.55;">
+          <b>本週處理完成</b> — 上次累積檔有、這次 ERP 沒有<br>
+          <span style="color:var(--text-muted);">代表「這張單在 ERP 中消失了,應該是被確認/處理掉了」,只記錄一次。</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:14px;padding:10px 12px;background:var(--surface-2);border-radius:6px;font-size:11px;color:var(--text-muted);line-height:1.6;">
+      <b style="color:var(--text);">💡 組合判讀:</b><br>
+      🆕 + 📅 同時亮 → 這週新出現、剛開的單,正常情況<br>
+      🆕 + 沒 📅 → 舊單這週才被追蹤,可能是積壓案件,要警覺<br>
+      🔴 警示 → 不論哪種情況,都該優先處理
+    </div>
+
+    <div class="modal-buttons">
+      <button class="btn-confirm" id="legendClose">了解</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const STORAGE_KEY = 'unconfirmed_docs_tracker_v31';
+const SYNC_URL_KEY = 'unconfirmed_sync_url';
+const SYNC_SECRET_KEY = 'unconfirmed_sync_secret';
+const TOOL_ID = 'unconfirmed';
+
+// ===== 雲端同步 =====
+function getSyncConfig() {
+  try {
+    return {
+      url: localStorage.getItem(SYNC_URL_KEY) || '',
+      secret: localStorage.getItem(SYNC_SECRET_KEY) || '',
+    };
+  } catch(e) { return { url: '', secret: '' }; }
+}
+
+function updateSyncStatusUI(state, msg) {
+  const el = document.getElementById('syncStatus');
+  if (!el) return;
+  const map = {
+    none:    { icon: '☁️', label: '未設定雲端', bg: '#f1f5f9', color: '#64748b', border: '#e2e8f0' },
+    syncing: { icon: '🔄', label: '同步中…',   bg: '#eff6ff', color: '#1d4ed8', border: '#93c5fd' },
+    ok:      { icon: '✅', label: msg || '已同步', bg: '#ecfdf5', color: '#047857', border: '#6ee7b7' },
+    error:   { icon: '⚠️', label: msg || '同步失敗', bg: '#fef2f2', color: '#b91c1c', border: '#fca5a5' },
+    offline: { icon: '📴', label: '離線模式',   bg: '#fefce8', color: '#92400e', border: '#fde68a' },
+  };
+  const s = map[state] || map.none;
+  el.textContent = s.icon + ' ' + s.label;
+  el.style.background = s.bg;
+  el.style.color = s.color;
+  el.style.border = '1px solid ' + s.border;
+}
+
+async function saveToCloud(payload) {
+  const cfg = getSyncConfig();
+  if (!cfg.url) return false;
+  try {
+    updateSyncStatusUI('syncing');
+    const res = await fetch(cfg.url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' }, // Apps Script CORS 需要 text/plain
+      body: JSON.stringify({ secret: cfg.secret, tool: TOOL_ID, payload }),
+    });
+    const json = await res.json();
+    if (json.ok) {
+      updateSyncStatusUI('ok', '已同步 ' + (payload.analysisDate || ''));
+      return true;
+    } else {
+      updateSyncStatusUI('error', json.error || '伺服器錯誤');
+      return false;
+    }
+  } catch(e) {
+    updateSyncStatusUI('offline', '連線失敗');
+    return false;
+  }
+}
+
+async function loadFromCloud() {
+  const cfg = getSyncConfig();
+  if (!cfg.url) return null;
+  try {
+    updateSyncStatusUI('syncing');
+    const url = cfg.url + '?tool=' + TOOL_ID + '&secret=' + encodeURIComponent(cfg.secret);
+    const res = await fetch(url);
+    const json = await res.json();
+    if (json.ok && json.data) {
+      updateSyncStatusUI('ok', '已載入 ' + (json.data.analysisDate || ''));
+      return json.data;
+    }
+    updateSyncStatusUI(cfg.url ? 'ok' : 'none', '尚無雲端資料');
+    return null;
+  } catch(e) {
+    updateSyncStatusUI('offline', '離線，使用本機資料');
+    return null;
+  }
+}
+
+function openSyncSettings() {
+  const cfg = getSyncConfig();
+  document.getElementById('syncUrlInput').value = cfg.url;
+  document.getElementById('syncSecretInput').value = cfg.secret;
+  document.getElementById('syncTestResult').textContent = '';
+  document.getElementById('syncModal').style.display = 'flex';
+}
+function closeSyncSettings() {
+  document.getElementById('syncModal').style.display = 'none';
+}
+
+async function testAndSaveSyncSettings() {
+  const url = document.getElementById('syncUrlInput').value.trim();
+  const secret = document.getElementById('syncSecretInput').value.trim();
+  const resultEl2 = document.getElementById('syncTestResult');
+  if (!url) { resultEl2.style.color = '#b91c1c'; resultEl2.textContent = '請填入網址'; return; }
+  resultEl2.style.color = '#1d4ed8'; resultEl2.textContent = '測試中…';
+  try {
+    const testUrl = url + '?tool=' + TOOL_ID + '&secret=' + encodeURIComponent(secret);
+    const res = await fetch(testUrl);
+    const json = await res.json();
+    if (json.ok !== undefined) {
+      try {
+        localStorage.setItem(SYNC_URL_KEY, url);
+        localStorage.setItem(SYNC_SECRET_KEY, secret);
+      } catch(e) {}
+      resultEl2.style.color = '#047857';
+      resultEl2.textContent = '✅ 連線成功！設定已儲存。';
+      updateSyncStatusUI('ok', '雲端已連線');
+      updateUploadUI();
+      setTimeout(closeSyncSettings, 1200);
+    } else {
+      resultEl2.style.color = '#b91c1c';
+      resultEl2.textContent = '❌ ' + (json.error || '連線失敗');
+    }
+  } catch(e) {
+    resultEl2.style.color = '#b91c1c';
+    resultEl2.textContent = '❌ 無法連線：' + e.message;
+  }
+}
+
+function classify(dept) {
+  if (!dept) return { cat: '未分類', name: '未分類', isAdmin: false };
+  const parts = String(dept).split('.');
+  const code = parts[0];
+  const name = parts[1] || dept;
+  if (/^WH[267]/.test(code)) return { cat: '行政類', name, isAdmin: true };
+  if (['WH4002','WH400F'].includes(code)) return { cat: '生產類-一廠', name, isAdmin: false };
+  if (['WH3102','WH3103'].includes(code)) return { cat: '生產類-二廠', name, isAdmin: false };
+  if (['WH3402','WH3403'].includes(code)) return { cat: '生產類-生技廠', name, isAdmin: false };
+  if (code === 'WH3302') return { cat: '生產類-捷威廠', name, isAdmin: false };
+  if (['WH3202','WH3203'].includes(code)) return { cat: '生產類-美德廠', name, isAdmin: false };
+  if (['WH3502','WH400A','WH400B','WH400C'].includes(code)) return { cat: '生產類-德暘廠(外帶盒+輪印+淋膜+分條)', name, isAdmin: false };
+  if (['WH5002','WH5003'].includes(code)) return { cat: '生產類-德暘廠(塑膠生管+塑膠倉管)', name, isAdmin: false };
+  return { cat: '未分類', name, isAdmin: false };
+}
+
+let erpData = null;
+let trackData = null;
+let processedRecords = [];
+let doneThisWeek = [];
+let currentFilter = 'all';
+let searchQuery = '';
+let analysisDate = '';
+
+const erpInput = document.getElementById('erpFile');
+const trackInput = document.getElementById('trackFile');
+const erpBtn = document.getElementById('erpBtn');
+const trackBtn = document.getElementById('trackBtn');
+const analyzeBtn = document.getElementById('analyzeBtn');
+const uploadZone = document.getElementById('uploadZone');
+const toggleUploadBtn = document.getElementById('toggleUpload');
+const welcomeEl = document.getElementById('welcome');
+const resultEl = document.getElementById('result');
+
+function parseDate(v) {
+  if (!v) return null;
+  if (v instanceof Date) return v;
+  const s = String(v);
+  const m = s.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+  if (m) return new Date(+m[1], +m[2]-1, +m[3]);
+  const d = new Date(s);
+  return isNaN(d) ? null : d;
+}
+function fmtDate(d) {
+  if (!d) return '';
+  if (typeof d === 'string') d = parseDate(d);
+  if (!d) return '';
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+function readExcel(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const wb = XLSX.read(e.target.result, { type: 'array', cellDates: true });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        resolve(XLSX.utils.sheet_to_json(sheet, { defval: '' }));
+      } catch (err) { reject(err); }
+    };
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(file);
+  });
+}
+function escapeAttr(s) {
+  return String(s).replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/\n/g, '&#10;');
+}
+
+erpInput.addEventListener('change', async e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  document.getElementById('erpName').textContent = file.name;
+  erpBtn.classList.add('has-file');
+  try { erpData = await readExcel(file); checkReady(); }
+  catch (err) { showToast('讀取 ERP 檔失敗: ' + err.message); }
+});
+
+trackInput.addEventListener('change', async e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  document.getElementById('trackName').textContent = file.name;
+  trackBtn.classList.add('has-file');
+  try {
+    const wb = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
+    const sheet = wb.Sheets['累積追蹤'] || wb.Sheets[wb.SheetNames[0]];
+    trackData = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+    checkReady();
+  } catch (err) { showToast('讀取累積檔失敗: ' + err.message); }
+});
+
+function checkReady() { analyzeBtn.disabled = !erpData; }
+
+// 根據雲端狀態切換上傳 UI
+function updateUploadUI() {
+  const cfg = getSyncConfig();
+  const hasCloud = !!cfg.url;
+  const trackWrap = document.getElementById('trackFileWrap');
+  const cloudNotice = document.getElementById('cloudTrackNotice');
+  if (trackWrap) trackWrap.style.display = hasCloud ? 'none' : '';
+  if (cloudNotice) cloudNotice.style.display = hasCloud ? 'flex' : 'none';
+}
+
+analyzeBtn.addEventListener('click', async () => {
+  // 如果有雲端設定，先從 localStorage 重建 trackData
+  const cfg = getSyncConfig();
+  if (cfg.url && !trackData && processedRecords.length > 0) {
+    // 用現有的 processedRecords 重建成 trackData 格式
+    trackData = processedRecords.map(r => ({
+      '單據編號': r.docNo,
+      '單據名稱': r.docName,
+      '單據日期': r.docDate,
+      '資料所屬部門': r.deptCode,
+      '資料所屬者': r.ownerRaw || r.owner,
+      '對應作業編號': r.programRaw || r.program,
+      '模組別': r.module || '',
+      '首次出現日期': r.firstSeen,
+      '首次匯入版本': r.version,
+    }));
+  }
+  analyze();
+});
+// =============================================================
+// 密碼設定 — 直接修改下方的 UPLOAD_PASSWORD 即可換密碼
+// =============================================================
+const UPLOAD_PASSWORD = '1204';
+// =============================================================
+
+const pwdModal = document.getElementById('pwdModal');
+const pwdInput = document.getElementById('pwdInput');
+const pwdError = document.getElementById('pwdError');
+
+function openPwdModal() {
+  pwdModal.classList.add('show');
+  pwdInput.value = '';
+  pwdError.textContent = '';
+  pwdInput.classList.remove('error');
+  setTimeout(() => pwdInput.focus(), 50);
+}
+function closePwdModal() {
+  pwdModal.classList.remove('show');
+}
+function verifyPassword() {
+  if (pwdInput.value === UPLOAD_PASSWORD) {
+    closePwdModal();
+    uploadZone.classList.toggle('hidden');
+    showToast('已開啟上傳介面');
+  } else {
+    pwdError.textContent = '密碼錯誤,請重試';
+    pwdInput.classList.add('error');
+    pwdInput.value = '';
+    pwdInput.focus();
+  }
+}
+
+document.getElementById('pwdConfirm').addEventListener('click', verifyPassword);
+document.getElementById('pwdCancel').addEventListener('click', closePwdModal);
+pwdInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') verifyPassword();
+  if (e.key === 'Escape') closePwdModal();
+});
+pwdModal.addEventListener('click', e => {
+  if (e.target === pwdModal) closePwdModal();
+});
+
+// 圖示說明彈窗
+const legendModal = document.getElementById('legendModal');
+const legendBtn = document.getElementById('legendBtn');
+const legendClose = document.getElementById('legendClose');
+function openLegend() { legendModal.classList.add('show'); }
+function closeLegend() { legendModal.classList.remove('show'); }
+if (legendBtn) legendBtn.addEventListener('click', openLegend);
+if (legendClose) legendClose.addEventListener('click', closeLegend);
+if (legendModal) {
+  legendModal.addEventListener('click', e => { if (e.target === legendModal) closeLegend(); });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && legendModal.classList.contains('show')) closeLegend();
+  });
+}
+
+toggleUploadBtn.addEventListener('click', () => {
+  // 如果上傳區已展開,直接收起來不需要密碼
+  if (!uploadZone.classList.contains('hidden')) {
+    uploadZone.classList.add('hidden');
+    return;
+  }
+  // 要展開上傳區時,先要求密碼
+  openPwdModal();
+});
+
+function analyze() {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const sevenDaysAgo = new Date(today); sevenDaysAgo.setDate(today.getDate() - 7);
+  const fourteenDaysAgo = new Date(today); fourteenDaysAgo.setDate(today.getDate() - 14);
+
+  const trackMap = new Map();
+  if (trackData) {
+    trackData.forEach(t => {
+      const docNo = String(t['單據編號'] || '').trim();
+      if (docNo) {
+        trackMap.set(docNo, {
+          firstSeen: parseDate(t['首次出現日期']) || today,
+          version: t['首次匯入版本'] || 'V1',
+          docName: String(t['單據名稱'] || ''),
+          docDate: t['單據日期'] || '',
+          dept: String(t['資料所屬部門'] || ''),
+          owner: String(t['資料所屬者'] || ''),
+          module: String(t['模組別'] || ''),
+          programRaw: String(t['對應作業編號'] || ''),
+        });
+      }
+    });
+  }
+
+  let nextVersion = 'V1';
+  if (trackData && trackData.length > 0) {
+    const versions = [...new Set(trackData.map(t => t['首次匯入版本']))].filter(Boolean);
+    const nums = versions.map(v => parseInt(String(v).replace(/[^\d]/g,''),10)).filter(n => !isNaN(n));
+    nextVersion = 'V' + (Math.max(0, ...nums) + 1);
+  }
+
+  const erpDocSet = new Set(erpData.map(r => String(r['單據編號'] || '').trim()).filter(Boolean));
+
+  processedRecords = erpData.map(r => {
+    const docNo = String(r['單據編號'] || '').trim();
+    const dept = String(r['資料所屬部門'] || '');
+    const owner = String(r['資料所屬者'] || '');
+    const programRaw = String(r['對應作業編號'] || '');
+    const docDate = parseDate(r['單據日期']);
+    const cls = classify(dept);
+    const isNewDoc = !trackMap.has(docNo);
+    const trackInfo = trackMap.get(docNo);
+    const firstSeen = isNewDoc ? today : trackInfo.firstSeen;
+    const isNewDate = docDate && docDate >= sevenDaysAgo;
+    // 警示:單據日期超過 14 天還沒處理(用單據日期客觀判斷,跟首次追蹤時間無關)
+    const isWarning = docDate && docDate <= fourteenDaysAgo;
+
+    return {
+      docNo,
+      docName: String(r['單據名稱'] || ''),
+      docDate: fmtDate(docDate),
+      dept: cls.name,
+      deptCode: dept,
+      category: cls.cat,
+      isAdmin: cls.isAdmin,
+      owner: owner.includes('.') ? owner.split('.')[1] : owner,
+      ownerRaw: owner,
+      program: programRaw.includes('.') ? programRaw.split('.')[1] : (programRaw || '(未指定程式)'),
+      programRaw,
+      module: String(r['模組別'] || ''),
+      isNewDoc, isNewDate, isWarning,
+      firstSeen: fmtDate(firstSeen),
+      version: isNewDoc ? nextVersion : trackInfo.version,
+    };
+  });
+
+  // 診斷 log:讓使用者開 console 可以驗證資料有沒有正確讀到
+  if (processedRecords.length > 0) {
+    const sample = processedRecords[0];
+    const hasProgram = processedRecords.filter(r => r.programRaw).length;
+    console.log('[追蹤工具] 解析完成:共', processedRecords.length, '筆');
+    console.log('[追蹤工具] 有程式名稱的:', hasProgram, '筆');
+    console.log('[追蹤工具] 第一筆樣本:', sample);
+    console.log('[追蹤工具] ERP 表頭 keys:', Object.keys(erpData[0] || {}));
+  }
+
+  doneThisWeek = [];
+  if (trackData) {
+    trackData.forEach(t => {
+      const docNo = String(t['單據編號'] || '').trim();
+      if (docNo && !erpDocSet.has(docNo)) {
+        const dept = String(t['資料所屬部門'] || '');
+        const owner = String(t['資料所屬者'] || '');
+        const programRaw = String(t['對應作業編號'] || '');
+        const cls = classify(dept);
+        doneThisWeek.push({
+          docNo,
+          docName: String(t['單據名稱'] || ''),
+          docDate: fmtDate(parseDate(t['單據日期'])),
+          deptCode: dept,
+          dept: cls.name,
+          category: cls.cat,
+          isAdmin: cls.isAdmin,
+          owner: owner.includes('.') ? owner.split('.')[1] : owner,
+          program: programRaw.includes('.') ? programRaw.split('.')[1] : (programRaw || '(未指定程式)'),
+          firstSeen: fmtDate(parseDate(t['首次出現日期'])),
+        });
+      }
+    });
+  }
+
+  analysisDate = fmtDate(today);
+  saveToStorage();
+  render();
+
+  resultEl.style.display = 'block';
+  welcomeEl.style.display = 'none';
+  uploadZone.classList.add('hidden');
+  toggleUploadBtn.style.display = 'inline-flex';
+
+  showToast('分析完成');
+}
+
+function saveToStorage() {
+  const payload = { processedRecords, doneThisWeek, analysisDate, savedAt: new Date().toISOString() };
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(payload)); } catch (err) { console.warn('LocalStorage save failed:', err); }
+  // 非同步存雲端，不阻塞 UI
+  saveToCloud(payload);
+}
+
+function loadFromStorage() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return false;
+    const s = JSON.parse(raw);
+    processedRecords = s.processedRecords || [];
+    doneThisWeek = s.doneThisWeek || [];
+    analysisDate = s.analysisDate || '';
+    return processedRecords.length > 0;
+  } catch (err) { return false; }
+}
+
+// 從雲端載入（非同步，頁面初始化時呼叫）
+async function tryLoadFromCloud() {
+  const cfg = getSyncConfig();
+  if (!cfg.url) { updateSyncStatusUI('none'); updateUploadUI(); return; }
+  const data = await loadFromCloud();
+  updateUploadUI();
+  if (!data) return;
+  // 只有雲端資料比本機新，才覆蓋
+  const localRaw = localStorage.getItem(STORAGE_KEY);
+  if (localRaw) {
+    const local = JSON.parse(localRaw);
+    if (local.savedAt && data.savedAt && local.savedAt >= data.savedAt) return;
+  }
+  processedRecords = data.processedRecords || [];
+  doneThisWeek = data.doneThisWeek || [];
+  analysisDate = data.analysisDate || '';
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch(e) {}
+  if (processedRecords.length > 0) {
+    render();
+    resultEl.style.display = 'block';
+    welcomeEl.style.display = 'none';
+    uploadZone.classList.add('hidden');
+    toggleUploadBtn.style.display = 'inline-flex';
+    showToast('已從雲端載入最新資料');
+  }
+}
+
+function render() {
+  const total = processedRecords.length;
+  const newCount = processedRecords.filter(r => r.isNewDoc).length;
+  const dateCount = processedRecords.filter(r => r.isNewDate).length;
+  const warnCount = processedRecords.filter(r => r.isWarning).length;
+  const adminCount = processedRecords.filter(r => r.isAdmin).length;
+  const prodCount = total - adminCount;
+  const doneCount = doneThisWeek.length;
+
+  const subText = document.getElementById('subtitleText');
+  if (subText) {
+    subText.textContent =
+      `分析日期 ${analysisDate} · 共 ${total} 筆未確認 · 本週新增 ${newCount} · 本週處理 ${doneCount}`;
+  }
+
+  document.getElementById('stats').innerHTML = `
+    <div class="stat"><div class="label">未確認總數</div><div class="value">${total}</div></div>
+    <div class="stat new"><div class="label">🆕 本週新增</div><div class="value">${newCount}</div></div>
+    <div class="stat done"><div class="label">✅ 本週處理</div><div class="value">${doneCount}</div></div>
+    <div class="stat date"><div class="label">📅 新日期 (7天內)</div><div class="value">${dateCount}</div></div>
+    <div class="stat warn"><div class="label">🔴 警示 (單據14天+)</div><div class="value">${warnCount}</div></div>
+    <div class="stat"><div class="label">行政 / 生產</div><div class="value" style="font-size:18px">${adminCount} / ${prodCount}</div></div>
+  `;
+
+  // 渲染 BI 看板
+  renderBIDashboard();
+
+  const filtered = processedRecords.filter(r => {
+    if (currentFilter === 'new' && !r.isNewDoc) return false;
+    if (currentFilter === 'date' && !r.isNewDate) return false;
+    if (currentFilter === 'warn' && !r.isWarning) return false;
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      return r.docNo.toLowerCase().includes(q) ||
+             r.dept.toLowerCase().includes(q) ||
+             r.owner.toLowerCase().includes(q) ||
+             r.program.toLowerCase().includes(q) ||
+             r.docName.toLowerCase().includes(q);
+    }
+    return true;
+  });
+
+  const adminGroups = groupByCategoryDeptProgram(filtered.filter(r => r.isAdmin));
+  const prodGroups = groupByCategoryDeptProgram(filtered.filter(r => !r.isAdmin));
+
+  document.getElementById('adminList').innerHTML = renderCategories(adminGroups, 'admin') ||
+    '<div class="empty"><div class="title">無資料</div></div>';
+  document.getElementById('prodList').innerHTML = renderCategories(prodGroups, 'prod') ||
+    '<div class="empty"><div class="title">無資料</div></div>';
+
+  document.getElementById('doneSection').innerHTML = renderDoneSection();
+
+  attachToggleHandlers();
+  attachCopyHandlers();
+
+  // 預設展開所有大類(第 1 層)
+  document.querySelectorAll('.category-header').forEach(h => {
+    h.classList.add('open');
+    h.parentElement.classList.add('open');
+  });
+}
+
+// === BI 戰情看板渲染 ===
+// BI 用的部門分類(8 個):行政、一廠、二廠、生技廠、捷威廠、美德廠、德暘廠紙類、德暘廠塑膠類
+function getBIGroup(category) {
+  if (category === '行政類') return { key: 'admin', name: '行政類', isAdmin: true };
+  if (category === '生產類-一廠') return { key: 'p1', name: '一廠', isAdmin: false };
+  if (category === '生產類-二廠') return { key: 'p2', name: '二廠', isAdmin: false };
+  if (category === '生產類-生技廠') return { key: 'bio', name: '生技廠', isAdmin: false };
+  if (category === '生產類-捷威廠') return { key: 'jw', name: '捷威廠', isAdmin: false };
+  if (category === '生產類-美德廠') return { key: 'md', name: '美德廠', isAdmin: false };
+  if (category === '生產類-德暘廠(外帶盒+輪印+淋膜+分條)') return { key: 'dy_paper', name: '德暘廠紙類', isAdmin: false };
+  if (category === '生產類-德暘廠(塑膠生管+塑膠倉管)') return { key: 'dy_plastic', name: '德暘廠塑膠類', isAdmin: false };
+  return { key: 'other', name: '其他', isAdmin: false };
+}
+
+const BI_GROUP_ORDER = ['admin', 'p1', 'p2', 'bio', 'jw', 'md', 'dy_paper', 'dy_plastic'];
+
+function renderBIDashboard() {
+  const dashboard = document.getElementById('biDashboard');
+  if (!dashboard) return;
+
+  // 依 BI 分組統計
+  const groups = {};
+  BI_GROUP_ORDER.forEach(k => {
+    groups[k] = { total: 0, newDoc: 0, newDate: 0, warn: 0, done: 0, name: '', isAdmin: false };
+  });
+
+  processedRecords.forEach(r => {
+    const g = getBIGroup(r.category);
+    if (!groups[g.key]) return; // 二廠等被歸到 'other',不顯示
+    groups[g.key].name = g.name;
+    groups[g.key].isAdmin = g.isAdmin;
+    groups[g.key].total++;
+    if (r.isNewDoc) groups[g.key].newDoc++;
+    if (r.isNewDate) groups[g.key].newDate++;
+    if (r.isWarning) groups[g.key].warn++;
+  });
+
+  doneThisWeek.forEach(d => {
+    const g = getBIGroup(d.category);
+    if (!groups[g.key]) return;
+    groups[g.key].done++;
+  });
+
+  // 圖表 1:各分類圓餅圖
+  const donutCards = BI_GROUP_ORDER.map(k => {
+    const g = groups[k];
+    if (!g.name) return ''; // 沒資料的 key 不顯示
+    return renderDonutCard(g);
+  }).filter(Boolean).join('');
+
+  // 圖表 2:部門排行(按未確認筆數)
+  const sortedGroups = BI_GROUP_ORDER
+    .map(k => groups[k])
+    .filter(g => g.name)
+    .slice()
+    .sort((a, b) => b.total - a.total);
+  const maxTotal = Math.max(1, ...sortedGroups.map(g => g.total));
+  const barRows = sortedGroups.map(g => {
+    const pct = (g.total / maxTotal * 100).toFixed(1);
+    const isWarn = g.warn / Math.max(1, g.total) > 0.5; // 警示佔比超過一半
+    return `
+      <div class="bi-bar-row">
+        <span class="bi-bar-label">${g.name}</span>
+        <div class="bi-bar-track">
+          <div class="bi-bar-fill ${isWarn ? 'warn' : ''}" style="width:${pct}%"></div>
+        </div>
+        <span class="bi-bar-num">${g.total}</span>
+      </div>
+    `;
+  }).join('');
+
+  // 圖表 3:警示排行
+  const warnGroups = sortedGroups.slice().sort((a, b) => b.warn - a.warn);
+  const maxWarn = Math.max(1, ...warnGroups.map(g => g.warn));
+  const warnRows = warnGroups.map(g => {
+    const pct = (g.warn / maxWarn * 100).toFixed(1);
+    return `
+      <div class="bi-bar-row">
+        <span class="bi-bar-label">${g.name}</span>
+        <div class="bi-bar-track">
+          <div class="bi-bar-fill warn" style="width:${pct}%"></div>
+        </div>
+        <span class="bi-bar-num">${g.warn}</span>
+      </div>
+    `;
+  }).join('');
+
+  // 圖表 4:本週新增 / 處理對比
+  const maxNew = Math.max(1, ...sortedGroups.map(g => Math.max(g.newDoc, g.done)));
+  const stackRows = sortedGroups.map(g => {
+    const newPct = (g.newDoc / maxNew * 100).toFixed(1);
+    const donePct = (g.done / maxNew * 100).toFixed(1);
+    return `
+      <div class="bi-bar-row" style="grid-template-columns:130px 1fr 36px 1fr 36px;">
+        <span class="bi-bar-label">${g.name}</span>
+        <div class="bi-bar-track"><div class="bi-bar-fill new" style="width:${newPct}%"></div></div>
+        <span class="bi-bar-num" style="color:var(--new-text);">${g.newDoc}</span>
+        <div class="bi-bar-track"><div class="bi-bar-fill done" style="width:${donePct}%"></div></div>
+        <span class="bi-bar-num" style="color:var(--done-text);">${g.done}</span>
+      </div>
+    `;
+  }).join('');
+
+  dashboard.innerHTML = `
+    <div class="bi-section-title">📊 各部門狀態(圓餅圖)</div>
+    <div class="bi-grid cols-7">
+      ${donutCards}
+    </div>
+
+    <div class="bi-section-title">📈 各部門未確認筆數排行</div>
+    <div class="bi-bar-chart">
+      ${barRows || '<div style="color:var(--text-muted);font-size:12px;">無資料</div>'}
+    </div>
+
+    <div class="bi-section-title">🔴 警示集中度(單據14天+ 排行)</div>
+    <div class="bi-bar-chart">
+      ${warnRows || '<div style="color:var(--text-muted);font-size:12px;">無資料</div>'}
+    </div>
+
+    <div class="bi-section-title">⚖️ 本週進度對比(綠=新增 / 紫=處理)</div>
+    <div class="bi-bar-chart">
+      <div class="bi-bar-row" style="grid-template-columns:130px 1fr 36px 1fr 36px;font-size:11px;color:var(--text-muted);font-weight:700;border-bottom:1px solid var(--border);padding-bottom:6px;margin-bottom:4px;">
+        <span></span>
+        <span style="text-align:center;">🆕 本週新增</span>
+        <span></span>
+        <span style="text-align:center;">✅ 本週處理</span>
+        <span></span>
+      </div>
+      ${stackRows || '<div style="color:var(--text-muted);font-size:12px;">無資料</div>'}
+    </div>
+  `;
+}
+
+function renderDonutCard(g) {
+  const slices = [
+    { label: '🆕 新單', value: g.newDoc, color: '#10b981' },
+    { label: '🔴 警示', value: g.warn, color: '#dc2626' },
+    { label: '📋 一般', value: Math.max(0, g.total - g.newDoc - g.warn), color: '#94a3b8' },
+  ];
+
+  const totalSlice = slices.reduce((s, x) => s + x.value, 0) || 1;
+  let cumulative = 0;
+  const radius = 28;
+  const circumference = 2 * Math.PI * radius;
+
+  const arcs = slices.map(s => {
+    if (s.value === 0) return '';
+    const dash = (s.value / totalSlice) * circumference;
+    const offset = -cumulative;
+    cumulative += dash;
+    return `<circle cx="32" cy="32" r="${radius}" fill="none" stroke="${s.color}" stroke-width="8" stroke-dasharray="${dash} ${circumference - dash}" stroke-dashoffset="${offset}" transform="rotate(-90 32 32)"/>`;
+  }).join('');
+
+  const legend = slices.map(s => `
+    <div class="legend-item">
+      <span class="dot" style="background:${s.color}"></span>
+      <span class="label">${s.label}</span>
+      <span class="num">${s.value}</span>
+    </div>
+  `).join('');
+
+  const tagClass = g.isAdmin ? 'admin' : 'prod';
+  const tagText = g.isAdmin ? '行政' : '生產';
+  const hasWarn = g.warn > 0;
+
+  // 完成率:本週處理 / (現有筆數 + 本週處理)
+  const denom = g.total + g.done;
+  const completionRate = denom > 0 ? (g.done / denom * 100) : 0;
+  const rateColor = completionRate >= 20 ? 'var(--done-text)' : (completionRate >= 5 ? 'var(--text)' : 'var(--text-muted)');
+
+  return `
+    <div class="bi-card ${hasWarn ? 'has-warning' : ''}">
+      <div class="bi-card-title">
+        <span>${g.name}</span>
+        <span class="bi-card-tag ${tagClass}">${tagText}</span>
+      </div>
+      <div style="display:flex;align-items:baseline;gap:8px;justify-content:space-between;margin:4px 0 8px;">
+        <div class="bi-card-total" style="margin:0;">${g.total}<span class="unit">筆</span></div>
+        <div style="text-align:right;">
+          <div style="font-size:18px;font-weight:700;color:${rateColor};font-variant-numeric:tabular-nums;line-height:1;">${completionRate.toFixed(1)}%</div>
+          <div style="font-size:10px;color:var(--text-muted);margin-top:2px;">完成率</div>
+        </div>
+      </div>
+      <div class="bi-donut-wrap">
+        <svg class="bi-donut" viewBox="0 0 64 64">
+          <circle cx="32" cy="32" r="${radius}" fill="none" stroke="var(--surface-2)" stroke-width="8"/>
+          ${arcs}
+        </svg>
+        <div class="bi-donut-legend">${legend}</div>
+      </div>
+    </div>
+  `;
+}
+
+function groupByCategoryDeptProgram(records) {
+  const cats = {};
+  records.forEach(r => {
+    if (!cats[r.category]) cats[r.category] = {};
+    if (!cats[r.category][r.dept]) cats[r.category][r.dept] = {};
+    if (!cats[r.category][r.dept][r.program]) cats[r.category][r.dept][r.program] = [];
+    cats[r.category][r.dept][r.program].push(r);
+  });
+  return cats;
+}
+function calcStats(recs) {
+  return {
+    total: recs.length,
+    newDoc: recs.filter(r => r.isNewDoc).length,
+  };
+}
+function calcDoneCount(filterFn) { return doneThisWeek.filter(filterFn).length; }
+
+function countDeep(deptObj) {
+  let n = 0;
+  Object.values(deptObj).forEach(owners => {
+    Object.values(owners).forEach(arr => n += arr.length);
+  });
+  return n;
+}
+
+function renderCategories(groups, type) {
+  const cats = Object.keys(groups);
+  if (cats.length === 0) return '';
+  cats.sort((a, b) => countDeep(groups[b]) - countDeep(groups[a]));
+
+  return cats.map(cat => {
+    const depts = groups[cat];
+    const allRecs = [];
+    Object.values(depts).forEach(owners => Object.values(owners).forEach(recs => allRecs.push(...recs)));
+    const stats = calcStats(allRecs);
+    const doneCount = calcDoneCount(d => d.category === cat);
+    const allDocNos = [...allRecs].sort((a, b) => (a.docDate || '').localeCompare(b.docDate || '')).map(r => r.docNo).join('\n');
+    const tagClass = type === 'admin' ? 'tag-admin' : 'tag-prod';
+    const tagText = type === 'admin' ? '行政' : '生產';
+
+    const deptCounts = {};
+    Object.keys(depts).forEach(d => {
+      deptCounts[d] = Object.values(depts[d]).reduce((s, arr) => s + arr.length, 0);
+    });
+    const deptKeys = Object.keys(depts).sort((a,b) => deptCounts[b] - deptCounts[a]);
+
+    return `
+      <div class="category">
+        <div class="category-header" data-toggle="cat">
+          <span class="toggle-icon">▶</span>
+          <span class="category-tag ${tagClass}">${tagText}</span>
+          <span class="category-name">${cat.replace(/^[行生]產?類-?/, '')}</span>
+          <span class="num-badge ${doneCount > 0 ? 'done' : 'empty'}"><span class="lbl">本週處理</span>${doneCount}</span>
+          <span class="num-badge ${stats.newDoc > 0 ? 'new' : 'empty'}"><span class="lbl">新增量</span>${stats.newDoc}</span>
+          <span class="total-count">${stats.total}<span class="unit">筆</span></span>
+          <button class="copy-btn" data-copy="${escapeAttr(allDocNos)}" onclick="event.stopPropagation()">📋 複製全部</button>
+        </div>
+        <div class="category-body">
+          ${deptKeys.map(dept => renderDept(dept, depts[dept], cat)).join('')}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderDept(deptName, programs, category) {
+  const allRecs = [];
+  Object.values(programs).forEach(recs => allRecs.push(...recs));
+  const stats = calcStats(allRecs);
+  const doneCount = calcDoneCount(d => d.category === category && d.dept === deptName);
+  const docNos = [...allRecs].sort((a, b) => (a.docDate || '').localeCompare(b.docDate || '')).map(r => r.docNo).join('\n');
+  const programKeys = Object.keys(programs).sort((a,b) => programs[b].length - programs[a].length);
+
+  return `
+    <div class="dept-group">
+      <div class="dept-header" data-toggle="dept">
+        <span class="toggle-icon">▶</span>
+        <span class="dept-name">${deptName}</span>
+        <span class="num-badge ${doneCount > 0 ? 'done' : 'empty'}"><span class="lbl">本週處理</span>${doneCount}</span>
+        <span class="num-badge ${stats.newDoc > 0 ? 'new' : 'empty'}"><span class="lbl">新增量</span>${stats.newDoc}</span>
+        <span class="total-count">${stats.total}<span class="unit">筆</span></span>
+        <button class="copy-btn" data-copy="${escapeAttr(docNos)}" onclick="event.stopPropagation()">📋 複製</button>
+      </div>
+      <div class="dept-body">
+        ${programKeys.map(p => renderProgram(p, programs[p], category, deptName)).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderProgram(programName, recs, category, deptName) {
+  const stats = calcStats(recs);
+  const doneCount = calcDoneCount(d => d.category === category && d.dept === deptName && d.program === programName);
+  // 按單據日期升冪排序(舊的在上、新的在下)
+  const sortedRecs = [...recs].sort((a, b) => {
+    if (!a.docDate) return 1;
+    if (!b.docDate) return -1;
+    return a.docDate.localeCompare(b.docDate);
+  });
+  const docNos = sortedRecs.map(r => r.docNo).join('\n');
+
+  return `
+    <div class="owner-group">
+      <div class="owner-header" data-toggle="owner">
+        <span class="toggle-icon">▶</span>
+        <span class="owner-name">${programName || '(未指定程式)'}</span>
+        <span class="num-badge ${doneCount > 0 ? 'done' : 'empty'}"><span class="lbl">本週處理</span>${doneCount}</span>
+        <span class="num-badge ${stats.newDoc > 0 ? 'new' : 'empty'}"><span class="lbl">新增量</span>${stats.newDoc}</span>
+        <span class="total-count">${stats.total}<span class="unit">筆</span></span>
+        <button class="copy-btn" data-copy="${escapeAttr(docNos)}" onclick="event.stopPropagation()">📋 複製</button>
+      </div>
+      <div class="owner-body">
+        ${sortedRecs.map(r => renderRow(r)).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderRow(r) {
+  const warnClass = r.isWarning ? 'warn' : '';
+  return `
+    <div class="row ${warnClass}">
+      <div class="badges">
+        ${r.isNewDoc ? '<span class="badge new">🆕新單</span>' : ''}
+        ${r.isNewDate ? '<span class="badge date">📅新</span>' : ''}
+        ${r.isWarning ? '<span class="badge warn">🔴警示</span>' : ''}
+      </div>
+      <span class="doc-no" data-copy-single="${escapeAttr(r.docNo)}" title="點擊複製單號">${r.docNo}</span>
+      <span class="doc-name">${r.docName}</span>
+      <span class="doc-owner">${r.owner || ''}</span>
+      <span class="doc-date">${r.docDate}</span>
+    </div>
+  `;
+}
+
+function renderDoneSection() {
+  if (doneThisWeek.length === 0) return '';
+  const docNos = doneThisWeek.map(d => d.docNo).join('\n');
+  return `
+    <div class="section-title">本週處理完成 (已從 ERP 消失)</div>
+    <div class="done-section">
+      <div class="done-header" data-toggle="done">
+        <span class="toggle-icon">▶</span>
+        <span class="done-tag">✅ 已處理</span>
+        <span class="done-title">本週共處理 ${doneThisWeek.length} 筆</span>
+        <button class="copy-btn" data-copy="${escapeAttr(docNos)}" onclick="event.stopPropagation()">📋 複製全部</button>
+      </div>
+      <div class="done-body">
+        ${doneThisWeek.map(d => `
+          <div class="done-row">
+            <span class="badge" style="background:var(--done-bg);color:var(--done-text);">✅ 已處理</span>
+            <span class="doc-no" data-copy-single="${escapeAttr(d.docNo)}" title="點擊複製">${d.docNo}</span>
+            <span style="color:var(--text-muted);font-size:12px;">${d.docName}</span>
+            <span style="color:var(--text-muted);font-size:12px;">${d.dept} · ${d.program} · ${d.owner}</span>
+            <span style="color:var(--text-dim);font-size:11px;text-align:right;">出現:${d.firstSeen}</span>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function attachToggleHandlers() {
+  document.querySelectorAll('[data-toggle]').forEach(el => {
+    el.onclick = e => {
+      if (e.target.closest('.copy-btn')) return;
+      el.classList.toggle('open');
+      el.parentElement.classList.toggle('open');
+    };
+  });
+}
+
+function attachCopyHandlers() {
+  document.querySelectorAll('[data-copy]').forEach(btn => {
+    btn.onclick = e => {
+      e.stopPropagation();
+      const text = btn.dataset.copy.replace(/&#10;/g, '\n').replace(/&quot;/g,'"').replace(/&#39;/g,"'");
+      copyToClipboard(text);
+      const original = btn.textContent;
+      btn.textContent = '✓ 已複製';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1500);
+      showToast(`已複製 ${text.split('\n').filter(Boolean).length} 個單號`);
+    };
+  });
+  document.querySelectorAll('[data-copy-single]').forEach(el => {
+    el.onclick = e => {
+      e.stopPropagation();
+      const text = el.dataset.copySingle.replace(/&quot;/g,'"').replace(/&#39;/g,"'");
+      copyToClipboard(text);
+      el.classList.add('copied');
+      setTimeout(() => el.classList.remove('copied'), 1500);
+      showToast('已複製: ' + text);
+    };
+  });
+}
+
+function copyToClipboard(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
+  } else { fallbackCopy(text); }
+}
+function fallbackCopy(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.style.position = 'fixed'; ta.style.left = '-9999px';
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); } catch(e) {}
+  document.body.removeChild(ta);
+}
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+document.querySelectorAll('.pill').forEach(p => {
+  p.onclick = () => {
+    document.querySelectorAll('.pill').forEach(x => x.classList.remove('active'));
+    p.classList.add('active');
+    currentFilter = p.dataset.filter;
+    render();
+  };
+});
+document.getElementById('search').oninput = e => { searchQuery = e.target.value; render(); };
+
+// 匯出唯讀版 HTML — 把當前已分析資料燒進獨立 HTML 檔案,給對方直接看
+function exportReadonlyHTML() {
+  if (processedRecords.length === 0) { showToast('沒有資料可匯出'); return; }
+  const todayStr = analysisDate || fmtDate(new Date());
+
+  // 動態組出 HTML 標籤片段 — source code 中刻意不出現完整字面避免 parser 誤判
+  const SO = '<' + 'script';
+  const SC = '<' + '/' + 'script' + '>';
+  const STO = '<' + 'style';
+  const STC = '<' + '/' + 'style' + '>';
+
+  // 取得當前頁面完整 HTML
+  const fullHTML = document.documentElement.outerHTML;
+
+  // 把資料序列化(用 JSON.stringify 安全處理特殊字元)
+  // 同時把 < 替換成 \u003c 避免 parser 誤判
+  const dataPayload = JSON.stringify({
+    processedRecords,
+    doneThisWeek,
+    analysisDate,
+    exportedAt: new Date().toISOString(),
+  }).replace(/</g, '\\u003c');
+
+  // takeover 腳本本體(純 JS 字串,沒有任何 script tag 字面)
+  const takeoverBody = [
+    '(function() {',
+    '  function bootReadonly() {',
+    '   try {',
+    '    var d = window.__READONLY_DATA__;',
+    '    if (!d || !window.__APP__) { console.error("唯讀資料或 APP 介面未就緒"); return; }',
+    '    window.__APP__.setData(d.processedRecords || [], d.doneThisWeek || [], d.analysisDate || "");',
+    '    var hideEls = ["#toggleUpload", "#topDownloadBtn", "#uploadZone", "#downloadBtn", "#exportReadonlyBtn", "#welcome", "#pwdModal"];',
+    '    hideEls.forEach(function(sel) { var el = document.querySelector(sel); if (el) el.style.display = "none"; });',
+    '    var h1 = document.querySelector(".title-area h1");',
+    '    if (h1) { h1.innerHTML = \'未確認單據追蹤 <span style="font-size:11px;color:#0f766e;font-weight:700;background:#ecfdf5;padding:2px 8px;border-radius:4px;">唯讀檢視版</span>\'; }',
+    '    var resultEl2 = document.getElementById("result");',
+    '    if (resultEl2) resultEl2.style.display = "block";',
+    '    var header = document.querySelector("header");',
+    '    if (header) {',
+    '      var info = document.createElement("div");',
+    '      info.style.cssText = "font-size:11px;color:#999;text-align:right;line-height:1.5;flex-shrink:0;";',
+    '      var snapshotDate = d.analysisDate || "";',
+    '      var exportedAt = d.exportedAt ? new Date(d.exportedAt).toLocaleString("zh-TW") : "";',
+    '      info.innerHTML = "📅 分析日期:" + snapshotDate + "<br>📤 匯出時間:" + exportedAt;',
+    '      header.appendChild(info);',
+    '    }',
+    '    window.__APP__.render();',
+    '    function expandAllCats() {',
+    '      document.querySelectorAll(".category-header").forEach(function(h) {',
+    '        h.classList.add("open");',
+    '        h.parentElement.classList.add("open");',
+    '      });',
+    '    }',
+    '    expandAllCats();',
+    '    document.querySelectorAll(".pill").forEach(function(p) {',
+    '      p.onclick = function() {',
+    '        document.querySelectorAll(".pill").forEach(function(x) { x.classList.remove("active"); });',
+    '        p.classList.add("active");',
+    '        window.__APP__.setFilter(p.dataset.filter);',
+    '        window.__APP__.render();',
+    '        setTimeout(expandAllCats, 0);',
+    '      };',
+    '    });',
+    '    var searchEl = document.getElementById("search");',
+    '    if (searchEl) {',
+    '      searchEl.oninput = function(e) {',
+    '        window.__APP__.setSearch(e.target.value);',
+    '        window.__APP__.render();',
+    '        setTimeout(expandAllCats, 0);',
+    '      };',
+    '    }',
+    '    // Tab 切換 — 用 cloneNode 移除主腳本綁的 addEventListener,避免雙重綁定',
+    '    var tabBar = document.querySelector(".tab-bar");',
+    '    var detailPane = document.getElementById("tabDetail");',
+    '    var biPane = document.getElementById("tabBI");',
+    '    function activateTab(name) {',
+    '      var btns = document.querySelectorAll(".tab-btn");',
+    '      btns.forEach(function(b) { b.classList.toggle("active", b.dataset.tab === name); });',
+    '      if (detailPane) detailPane.classList.toggle("active", name === "detail");',
+    '      if (biPane) biPane.classList.toggle("active", name === "bi");',
+    '    }',
+    '    if (tabBar) {',
+    '      // 把 tab-bar 整個換掉清除舊事件',
+    '      var newTabBar = tabBar.cloneNode(true);',
+    '      tabBar.parentNode.replaceChild(newTabBar, tabBar);',
+    '      // 改用 event delegation 綁在 tab-bar 上',
+    '      newTabBar.addEventListener("click", function(e) {',
+    '        var btn = e.target.closest(".tab-btn");',
+    '        if (btn && btn.dataset.tab) activateTab(btn.dataset.tab);',
+    '      });',
+    '    }',
+    '    // 重新指定全域 __switchTab,用最新的 DOM 元素參考(inline onclick 會用到)',
+    '    window.__switchTab = activateTab;',
+    '    // Tab 預設一律是「明細列表」',
+    '    activateTab("detail");',
+    '   } catch (err) {',
+    '     // 把錯誤直接畫到頁面上,讓使用者能拍照回報',
+    '     var errBox = document.createElement("div");',
+    '     errBox.style.cssText = "position:fixed;top:10px;left:10px;right:10px;background:#fee;border:2px solid #c00;padding:12px;font-size:11px;color:#900;z-index:9999;font-family:monospace;white-space:pre-wrap;border-radius:6px;";',
+    '     errBox.textContent = "唯讀版錯誤:" + (err && err.message ? err.message : err) + "\\n\\n" + (err && err.stack ? err.stack : "");',
+    '     document.body.appendChild(errBox);',
+    '   }',
+    '  }',
+    '  if (document.readyState === "loading") { document.addEventListener("DOMContentLoaded", bootReadonly); } else { bootReadonly(); }',
+    '})();'
+  ].join('\n');
+
+  // 注入到 head 的只剩 CSS(讓 hidden 元素一開始就不顯示,避免閃爍)
+  const readonlyInit =
+    '\n' + STO + ' id="readonly-style">\n' +
+    '  #toggleUpload, #topDownloadBtn, #uploadZone, #downloadBtn,\n' +
+    '  #exportReadonlyBtn, #welcome, #pwdModal { display: none !important; }\n' +
+    STC + '\n';
+
+  // readonly 資料 + mode 改放在 body 開頭(<body> 之後,主腳本之前)
+  // 確保即使 iOS Safari 預覽不執行 head 中的 inline script,這個 script 也會跑
+  const readonlyDataScript =
+    '\n' + SO + ' id="readonly-data">\n' +
+    'window.__READONLY_DATA__ = ' + dataPayload + ';\n' +
+    'window.__READONLY_MODE__ = true;\n' +
+    SC + '\n';
+
+  // 注入到 body 結尾的 takeover 腳本
+  const readonlyScript =
+    '\n' + SO + ' id="readonly-takeover">\n' +
+    takeoverBody + '\n' +
+    SC + '\n';
+
+  // 用動態組合避開 source 字面
+  const HE = '<' + '/' + 'head' + '>';
+  const BE = '<' + '/' + 'body' + '>';
+  const BO = '<' + 'body';
+  const headIdx = fullHTML.lastIndexOf(HE);
+
+  let modified = fullHTML;
+  if (headIdx !== -1) {
+    modified = modified.slice(0, headIdx) + readonlyInit + modified.slice(headIdx);
+  }
+
+  // 在 <body> 開啟標籤後立刻插入 readonlyDataScript
+  // 用 regex 找 <body...> 結束位置(可能有 attributes)
+  var bodyOpenRegex = /<body[^>]*>/i;
+  var bodyOpenMatch = modified.match(bodyOpenRegex);
+  if (bodyOpenMatch) {
+    var bodyOpenEnd = bodyOpenMatch.index + bodyOpenMatch[0].length;
+    modified = modified.slice(0, bodyOpenEnd) + readonlyDataScript + modified.slice(bodyOpenEnd);
+  }
+
+  const newBodyIdx = modified.lastIndexOf(BE);
+  if (newBodyIdx !== -1) {
+    modified = modified.slice(0, newBodyIdx) + readonlyScript + modified.slice(newBodyIdx);
+  }
+  modified = modified.replace(
+    /<title>[^<]*<\/title>/,
+    '<title>未確認單據追蹤 (唯讀版) - ' + todayStr + '</title>'
+  );
+
+  // 觸發下載
+  const blob = new Blob([modified], { type: 'text/html;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = '未確認單據_唯讀版_' + todayStr + '.html';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  showToast('唯讀版 HTML 已匯出,可直接傳給對方');
+}
+
+document.getElementById('exportReadonlyBtn').onclick = exportReadonlyHTML;
+
+// 手機極簡唯讀版 — 完全獨立 HTML,不依賴 JavaScript
+// 適合用 Line/Email 傳給對方手機,iOS Quick Look 預覽就能看
+function exportMobileHTML() {
+  if (processedRecords.length === 0) { showToast('沒有資料可匯出'); return; }
+  const todayStr = analysisDate || fmtDate(new Date());
+
+  // 計算統計
+  const total = processedRecords.length;
+  const newCount = processedRecords.filter(r => r.isNewDoc).length;
+  const dateCount = processedRecords.filter(r => r.isNewDate).length;
+  const warnCount = processedRecords.filter(r => r.isWarning).length;
+  const doneCount = doneThisWeek.length;
+  const adminCount = processedRecords.filter(r => r.isAdmin).length;
+  const prodCount = total - adminCount;
+
+  // 各分類分組
+  const groups = {};
+  BI_GROUP_ORDER.forEach(k => { groups[k] = { total: 0, newDoc: 0, warn: 0, done: 0, name: '', isAdmin: false }; });
+  processedRecords.forEach(r => {
+    const g = getBIGroup(r.category);
+    if (!groups[g.key]) return;
+    groups[g.key].name = g.name;
+    groups[g.key].isAdmin = g.isAdmin;
+    groups[g.key].total++;
+    if (r.isNewDoc) groups[g.key].newDoc++;
+    if (r.isWarning) groups[g.key].warn++;
+  });
+  doneThisWeek.forEach(d => {
+    const g = getBIGroup(d.category);
+    if (!groups[g.key]) return;
+    groups[g.key].done++;
+  });
+
+  // 產生圓餅圖 SVG (純 SVG,不依賴 JS)
+  function makeDonut(g) {
+    const slices = [
+      { value: g.newDoc, color: '#10b981' },
+      { value: g.warn, color: '#dc2626' },
+      { value: Math.max(0, g.total - g.newDoc - g.warn), color: '#94a3b8' },
+    ];
+    const totalSlice = slices.reduce((s, x) => s + x.value, 0) || 1;
+    const radius = 28;
+    const circumference = 2 * Math.PI * radius;
+    let cumulative = 0;
+    let arcs = '';
+    slices.forEach(s => {
+      if (s.value === 0) return;
+      const dash = (s.value / totalSlice) * circumference;
+      const offset = -cumulative;
+      cumulative += dash;
+      arcs += `<circle cx="32" cy="32" r="${radius}" fill="none" stroke="${s.color}" stroke-width="8" stroke-dasharray="${dash} ${circumference - dash}" stroke-dashoffset="${offset}" transform="rotate(-90 32 32)"/>`;
+    });
+    return `<svg viewBox="0 0 64 64" width="64" height="64"><circle cx="32" cy="32" r="${radius}" fill="none" stroke="#f1f5f9" stroke-width="8"/>${arcs}</svg>`;
+  }
+
+  // 產生部門卡 HTML
+  const deptCards = BI_GROUP_ORDER
+    .map(k => groups[k])
+    .filter(g => g.name && g.total > 0)
+    .map(g => {
+      const denom = g.total + g.done;
+      const rate = denom > 0 ? (g.done / denom * 100).toFixed(1) : '0.0';
+      const tagBg = g.isAdmin ? '#fef3c7' : '#dbeafe';
+      const tagColor = g.isAdmin ? '#92400e' : '#1e40af';
+      const tagText = g.isAdmin ? '行政' : '生產';
+      const cardBorder = g.warn > 0 ? '#fecaca' : '#e5e7eb';
+      return `
+<div style="background:#fff;border:1px solid ${cardBorder};border-radius:10px;padding:14px;margin-bottom:10px;">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+    <span style="font-size:14px;font-weight:600;color:#0f172a;">${g.name}</span>
+    <span style="font-size:10px;font-weight:700;padding:2px 6px;border-radius:3px;background:${tagBg};color:${tagColor};">${tagText}</span>
+  </div>
+  <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;">
+    <div style="font-size:24px;font-weight:700;color:#0f172a;">${g.total}<span style="font-size:11px;color:#64748b;font-weight:400;margin-left:3px;">筆</span></div>
+    <div style="text-align:right;">
+      <div style="font-size:18px;font-weight:700;color:${rate >= 20 ? '#7c3aed' : rate >= 5 ? '#0f172a' : '#94a3b8'};">${rate}%</div>
+      <div style="font-size:10px;color:#64748b;">完成率</div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px;">
+    ${makeDonut(g)}
+    <div style="flex:1;font-size:11px;line-height:1.7;">
+      <div style="display:flex;align-items:center;gap:5px;"><span style="width:8px;height:8px;border-radius:50%;background:#10b981;display:inline-block;"></span><span style="color:#64748b;flex:1;">🆕 新單</span><span style="font-weight:600;color:#0f172a;">${g.newDoc}</span></div>
+      <div style="display:flex;align-items:center;gap:5px;"><span style="width:8px;height:8px;border-radius:50%;background:#dc2626;display:inline-block;"></span><span style="color:#64748b;flex:1;">🔴 警示</span><span style="font-weight:600;color:#0f172a;">${g.warn}</span></div>
+      <div style="display:flex;align-items:center;gap:5px;"><span style="width:8px;height:8px;border-radius:50%;background:#94a3b8;display:inline-block;"></span><span style="color:#64748b;flex:1;">✅ 處理</span><span style="font-weight:600;color:#0f172a;">${g.done}</span></div>
+    </div>
+  </div>
+</div>`;
+    }).join('');
+
+  // 部門排行(橫向長條)
+  const sortedGroups = BI_GROUP_ORDER.map(k => groups[k]).filter(g => g.name && g.total > 0).sort((a, b) => b.total - a.total);
+  const maxTotal = Math.max(1, ...sortedGroups.map(g => g.total));
+  const barRows = sortedGroups.map(g => {
+    const pct = (g.total / maxTotal * 100).toFixed(1);
+    const isWarn = g.warn / Math.max(1, g.total) > 0.5;
+    const fillColor = isWarn ? 'linear-gradient(90deg,#f87171,#dc2626)' : 'linear-gradient(90deg,#14b8a6,#0d9488)';
+    return `
+<div style="display:grid;grid-template-columns:80px 1fr 40px;gap:8px;align-items:center;padding:5px 0;font-size:12px;">
+  <span style="color:#0f172a;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${g.name}</span>
+  <div style="background:#f1f5f9;border-radius:4px;height:18px;overflow:hidden;">
+    <div style="height:100%;border-radius:4px;background:${fillColor};width:${pct}%;"></div>
+  </div>
+  <span style="color:#0f172a;font-weight:700;text-align:right;">${g.total}</span>
+</div>`;
+  }).join('');
+
+  const exportedAt = new Date().toLocaleString('zh-TW');
+
+  // 完全獨立的 HTML(不依賴主工具)— 純 HTML + CSS,無 JavaScript
+  const html = `<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>未確認單據戰情看板 (手機版) - ${todayStr}</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "PingFang TC", sans-serif; background: #f8fafc; color: #0f172a; padding: 16px; line-height: 1.5; }
+h1 { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
+.badge { font-size: 11px; color: #0f766e; font-weight: 700; background: #ecfdf5; padding: 2px 8px; border-radius: 4px; display: inline-block; margin-left: 4px; vertical-align: middle; }
+.subtitle { font-size: 12px; color: #64748b; margin-bottom: 6px; }
+.export-info { font-size: 10px; color: #94a3b8; margin-bottom: 18px; }
+.section-title { font-size: 13px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.06em; margin: 18px 0 10px; padding-left: 10px; border-left: 3px solid #0d9488; }
+.stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px; }
+.stat-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px 12px; }
+.stat-label { font-size: 11px; color: #64748b; margin-bottom: 4px; }
+.stat-value { font-size: 22px; font-weight: 700; }
+.stat-value.green { color: #047857; }
+.stat-value.purple { color: #7c3aed; }
+.stat-value.blue { color: #1d4ed8; }
+.stat-value.red { color: #b91c1c; }
+.bar-chart { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 14px; }
+` + '</' + 'style>' + `
+` + '</' + 'head>' + `
+<body>
+
+<h1>未確認單據戰情看板<span class="badge">手機版</span></h1>
+<div class="subtitle">分析日期 ${todayStr} · 共 ${total} 筆未確認 · 本週新增 ${newCount} · 本週處理 ${doneCount}</div>
+<div class="export-info">📤 匯出時間:${exportedAt}</div>
+
+<div class="section-title">📊 整體統計</div>
+<div class="stats-grid">
+  <div class="stat-card"><div class="stat-label">未確認總數</div><div class="stat-value">${total}</div></div>
+  <div class="stat-card"><div class="stat-label">🆕 本週新增</div><div class="stat-value green">${newCount}</div></div>
+  <div class="stat-card"><div class="stat-label">✅ 本週處理</div><div class="stat-value purple">${doneCount}</div></div>
+  <div class="stat-card"><div class="stat-label">📅 新日期 (7天內)</div><div class="stat-value blue">${dateCount}</div></div>
+  <div class="stat-card"><div class="stat-label">🔴 警示 (14天+)</div><div class="stat-value red">${warnCount}</div></div>
+  <div class="stat-card"><div class="stat-label">行政 / 生產</div><div class="stat-value" style="font-size:18px;">${adminCount} / ${prodCount}</div></div>
+</div>
+
+<div class="section-title">🏢 各部門狀態</div>
+${deptCards}
+
+<div class="section-title">📈 各部門排行</div>
+<div class="bar-chart">${barRows}</div>
+
+<div style="text-align:center;font-size:10px;color:#94a3b8;margin-top:24px;padding:12px;">
+  ─── 報告結束 ───<br>
+  本檔案為唯讀統計,如需詳細單號請洽承辦人
+</div>
+
+` + '</' + 'body>' + `
+` + '</' + 'html>';
+
+  // 觸發下載
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = '單據看板_手機版_' + todayStr + '.html';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  showToast('手機版已匯出,可傳給對方手機看');
+}
+
+document.getElementById('exportMobileBtn').onclick = exportMobileHTML;
+
+(function init() {
+  // 唯讀模式 — 主腳本直接處理,不再依賴 takeover(避免 iOS Safari ZIP 預覽掛掉)
+  if (window.__READONLY_MODE__) {
+    var d = window.__READONLY_DATA__;
+    if (!d) return;
+
+    function applyReadonlyMode() {
+      try {
+        // 載入資料
+        processedRecords = d.processedRecords || [];
+        doneThisWeek = d.doneThisWeek || [];
+        analysisDate = d.analysisDate || '';
+
+        // 1. 隱藏所有上傳/編輯/密碼相關元素 + 「本週處理完成」區塊(這是明細列表外的)
+        var hideSelectors = ['#toggleUpload', '#topDownloadBtn', '#uploadZone', '#downloadBtn', '#exportReadonlyBtn', '#welcome', '#pwdModal'];
+        for (var i = 0; i < hideSelectors.length; i++) {
+          var el = document.querySelector(hideSelectors[i]);
+          if (el) {
+            el.style.display = 'none';
+            el.style.visibility = 'hidden';
+          }
+        }
+
+        // 2. 改標題 — 直接操作 DOM 節點,不用 innerHTML(更可靠)
+        var h1 = document.querySelector('.title-area h1');
+        if (h1) {
+          // 清空再重建
+          while (h1.firstChild) h1.removeChild(h1.firstChild);
+          h1.appendChild(document.createTextNode('未確認單據追蹤 '));
+          var badge = document.createElement('span');
+          badge.style.cssText = 'font-size:11px;color:#0f766e;font-weight:700;background:#ecfdf5;padding:2px 8px;border-radius:4px;display:inline-block;margin-left:4px;';
+          badge.textContent = '唯讀檢視版';
+          h1.appendChild(badge);
+        }
+
+        // 3. 顯示資料區
+        if (resultEl) resultEl.style.display = 'block';
+
+        // 4. 加日期資訊到 header
+        var header = document.querySelector('header');
+        if (header && !document.getElementById('readonlyDateInfo')) {
+          var info = document.createElement('div');
+          info.id = 'readonlyDateInfo';
+          info.style.cssText = 'font-size:11px;color:#999;text-align:right;line-height:1.5;flex-shrink:0;';
+          var snapshotDate = d.analysisDate || '';
+          var exportedAt = d.exportedAt ? new Date(d.exportedAt).toLocaleString('zh-TW') : '';
+          info.innerHTML = '📅 分析日期:' + snapshotDate + '<br>📤 匯出時間:' + exportedAt;
+          header.appendChild(info);
+        }
+
+        // 5. 渲染
+        render();
+
+        // 6. 設定 Tab 預設一律是「明細列表」
+        if (typeof window.__switchTab === 'function') {
+          window.__switchTab('detail');
+        }
+      } catch (err) {
+        var errBox = document.createElement('div');
+        errBox.style.cssText = 'position:fixed;top:10px;left:10px;right:10px;background:#fee;border:2px solid #c00;padding:12px;font-size:11px;color:#900;z-index:9999;font-family:monospace;white-space:pre-wrap;border-radius:6px;';
+        errBox.textContent = '唯讀版錯誤(主腳本):' + (err && err.message ? err.message : err) + '\n\n' + (err && err.stack ? err.stack : '');
+        document.body.appendChild(errBox);
+      }
+    }
+
+    // 立刻跑一次 + DOMContentLoaded 後再跑一次(雙保險)
+    applyReadonlyMode();
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', applyReadonlyMode);
+    }
+    // 再延遲一次,確保 iOS Safari 有時間穩定 DOM
+    setTimeout(applyReadonlyMode, 100);
+    setTimeout(applyReadonlyMode, 500);
+    return;
+  }
+
+  if (loadFromStorage()) {
+    render();
+    resultEl.style.display = 'block';
+    welcomeEl.style.display = 'none';
+    uploadZone.classList.add('hidden');
+    toggleUploadBtn.style.display = 'inline-flex';
+    // 背景靜默檢查雲端是否有更新
+    tryLoadFromCloud();
+  } else {
+    welcomeEl.style.display = 'block';
+    uploadZone.classList.remove('hidden');
+    // 嘗試從雲端載入
+    tryLoadFromCloud();
+  }
+})();
+
+// === Tab 切換 ===
+const TAB_STORAGE_KEY = 'unconfirmed_docs_tab_v1';
+function initTabs() {
+  const tabBtns = document.querySelectorAll('.tab-btn');
+  const detailPane = document.getElementById('tabDetail');
+  const biPane = document.getElementById('tabBI');
+  if (!tabBtns.length || !detailPane || !biPane) return;
+
+  function activateTab(name) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+    detailPane.classList.toggle('active', name === 'detail');
+    biPane.classList.toggle('active', name === 'bi');
+    // 唯讀模式下不寫 localStorage(避免污染對方手機)
+    if (!window.__READONLY_MODE__) {
+      try { localStorage.setItem(TAB_STORAGE_KEY, name); } catch(e) {}
+    }
+  }
+
+  // 暴露為全域,讓 inline onclick 可以呼叫(iOS Safari 從 ZIP 預覽時最可靠的綁定方式)
+  window.__switchTab = activateTab;
+
+  // 預設一律是「明細列表」(可手動切到看板,localStorage 會記憶)
+  const defaultTab = 'detail';
+
+  if (window.__READONLY_MODE__) {
+    activateTab(defaultTab);
+  } else {
+    let savedTab = null;
+    try { savedTab = localStorage.getItem(TAB_STORAGE_KEY); } catch(e) {}
+    activateTab(savedTab || defaultTab);
+  }
+}
+initTabs();
+
+// 暴露給唯讀版的 takeover script 使用(let 變數預設不會掛在 window)
+window.__APP__ = {
+  setData: function(records, done, dateStr) {
+    processedRecords = records;
+    doneThisWeek = done;
+    analysisDate = dateStr;
+  },
+  setFilter: function(f) { currentFilter = f; },
+  setSearch: function(q) { searchQuery = q; },
+  render: render,
+};
+</script>
+</body>
+</html>
