@@ -1236,8 +1236,8 @@ const TOOL_ID = 'workorder';
 
 // ===== 雲端同步 =====
 function getSyncConfig() {
-  try { return { url: localStorage.getItem(SYNC_URL_KEY) || '', secret: localStorage.getItem(SYNC_SECRET_KEY) || '' }; }
-  catch(e) { return { url: '', secret: '' }; }
+  try { return { url: 'https://script.google.com/macros/s/AKfycbyCILNqSbm9rPy3HSeiGnow4_ZM5Lx_RmBX5tsdGOZH56iUW6azY20wRyMES5z5e7TG/exec', secret: localStorage.getItem(SYNC_SECRET_KEY) || '' }; }
+  catch(e) { return { url: 'https://script.google.com/macros/s/AKfycbyCILNqSbm9rPy3HSeiGnow4_ZM5Lx_RmBX5tsdGOZH56iUW6azY20wRyMES5z5e7TG/exec', secret: '' }; }
 }
 
 function updateSyncStatusUI(state, msg) {
