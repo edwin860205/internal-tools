@@ -1874,7 +1874,6 @@ async function tryLoadFromCloud() {
   const data = await loadFromCloud();
   updateUploadUI();
   if (!data) return;
-  // 雲端有資料就直接用，不做 savedAt 比對
   workOrders = data.workOrders || [];
   completedWO = data.completedWO || [];
   analysisDate = data.analysisDate || '';
