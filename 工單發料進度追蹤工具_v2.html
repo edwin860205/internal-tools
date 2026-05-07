@@ -996,7 +996,7 @@
 <div class="container">
   <header>
     <div class="title-area">
-      <h1>工單發料進度追蹤 <span style="font-size:11px;color:var(--text-dim);font-weight:400;letter-spacing:0;">v2.0</span></h1>
+      <h1>工單發料進度追蹤 <span style="font-size:11px;color:var(--text-dim);font-weight:400;letter-spacing:0;">v2.1</span></h1>
       <p class="sub" id="subtitle" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
         <span id="subtitleText">尚未上傳資料</span>
         <select class="month-select" id="monthSelect" style="display:none;">
@@ -1852,7 +1852,20 @@ function analyze() {
 
 function saveToStorage() {
   const payload = { workOrders, completedWO, analysisDate, savedAt: new Date().toISOString() };
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(payload)); } catch (err) { console.warn('Save failed:', err); }
+  // localStorage 容量有限（5MB），只存精簡版（去掉 materials 明細）
+  try {
+    const slim = {
+      workOrders: workOrders.map(w => {
+        const { materials, matCategories, ...rest } = w;
+        return rest;
+      }),
+      completedWO,
+      analysisDate,
+      savedAt: payload.savedAt,
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(slim));
+  } catch (err) { console.warn('Save failed:', err); }
+  // 雲端存完整版
   saveToCloud(payload);
 }
 
@@ -1877,7 +1890,17 @@ async function tryLoadFromCloud() {
   workOrders = data.workOrders || [];
   completedWO = data.completedWO || [];
   analysisDate = data.analysisDate || '';
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch(e) {}
+  // 寫回 localStorage 用精簡版
+  try {
+    const slim = {
+      workOrders: workOrders.map(w => {
+        const { materials, matCategories, ...rest } = w;
+        return rest;
+      }),
+      completedWO, analysisDate, savedAt: data.savedAt,
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(slim));
+  } catch(e) {}
   if (workOrders.length > 0) {
     render();
     resultEl.style.display = 'block';
