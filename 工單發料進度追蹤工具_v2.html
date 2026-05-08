@@ -996,7 +996,7 @@
 <div class="container">
   <header>
     <div class="title-area">
-      <h1>工單發料進度追蹤 <span style="font-size:11px;color:var(--text-dim);font-weight:400;letter-spacing:0;">v2.2</span></h1>
+      <h1>工單發料進度追蹤 <span style="font-size:11px;color:var(--text-dim);font-weight:400;letter-spacing:0;">v2.3</span></h1>
       <p class="sub" id="subtitle" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
         <span id="subtitleText">尚未上傳資料</span>
         <select class="month-select" id="monthSelect" style="display:none;">
@@ -1873,7 +1873,14 @@ function loadFromStorage() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return false;
     const s = JSON.parse(raw);
-    workOrders = s.workOrders || [];
+    const wos = s.workOrders || [];
+    // 偵測精簡版(雲端寫回 localStorage 時為了省空間會剝掉 materials)
+    // 若是精簡版,不可直接 render(BI 看板需要 materials),交給雲端拉完整版回來
+    const hasMaterials = wos.length > 0 && Array.isArray(wos[0].materials);
+    if (wos.length > 0 && !hasMaterials) {
+      return false;
+    }
+    workOrders = wos;
     completedWO = s.completedWO || [];
     analysisDate = s.analysisDate || '';
     return workOrders.length > 0;
@@ -2648,7 +2655,7 @@ function renderBIShortageSection() {
   const allShortage = [];
   wos.forEach(w => {
     if (!w.hasShortage) return;
-    w.materials.forEach(m => {
+    (w.materials || []).forEach(m => {
       if (m.shortage) {
         allShortage.push({
           wo: w,
@@ -3017,7 +3024,7 @@ function buildMonthReport(monthKey) {
 
   // 計算每張工單的未發料項
   monthWOs.forEach(w => {
-    w._undelivered = w.materials.filter(mat => mat.shouldIssue > 0 && mat.issued === 0);
+    w._undelivered = (w.materials || []).filter(mat => mat.shouldIssue > 0 && mat.issued === 0);
   });
 
   const wb = XLSX.utils.book_new();
@@ -3089,7 +3096,7 @@ function buildMonthReport(monthKey) {
   const shortageRows = [];
   monthWOs.forEach(w => {
     if (!w.hasShortage) return;
-    w.materials.forEach(mat => {
+    (w.materials || []).forEach(mat => {
       if (!mat.shortage) return;
       shortageRows.push({
         '嚴重度': mat.shortage.level === 'warn' ? '🔴 嚴重' : '🟡 輕度',
