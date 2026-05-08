@@ -625,7 +625,7 @@
 <div class="container">
   <header>
     <div class="title-area">
-      <h1>未確認單據追蹤 <span style="font-size:11px;color:var(--text-dim);font-weight:400;letter-spacing:0;">v4.1</span></h1>
+      <h1>未確認單據追蹤 <span style="font-size:11px;color:var(--text-dim);font-weight:400;letter-spacing:0;">v4.2</span></h1>
       <p class="sub" id="subtitle" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
         <span id="subtitleText">尚未上傳資料</span>
         <button id="legendBtn" type="button" style="background:transparent;border:1px solid var(--border-strong);border-radius:5px;padding:2px 9px;font-size:11px;color:var(--text-muted);cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:4px;height:22px;">📖 圖示說明</button>
@@ -961,14 +961,39 @@ function classify(dept) {
   const parts = String(dept).split('.');
   const code = parts[0];
   const name = parts[1] || dept;
-  if (/^WH[267]/.test(code)) return { cat: '行政類', name, isAdmin: true };
-  if (['WH4002','WH400F'].includes(code)) return { cat: '生產類-一廠', name, isAdmin: false };
-  if (['WH3102','WH3103'].includes(code)) return { cat: '生產類-二廠', name, isAdmin: false };
-  if (['WH3402','WH3403'].includes(code)) return { cat: '生產類-生技廠', name, isAdmin: false };
-  if (code === 'WH3302') return { cat: '生產類-捷威廠', name, isAdmin: false };
-  if (['WH3202','WH3203'].includes(code)) return { cat: '生產類-美德廠', name, isAdmin: false };
-  if (['WH3502','WH400A','WH400B','WH400C'].includes(code)) return { cat: '生產類-德暘廠(外帶盒+輪印+淋膜+分條)', name, isAdmin: false };
-  if (['WH5002','WH5003'].includes(code)) return { cat: '生產類-德暘廠(塑膠生管+塑膠倉管)', name, isAdmin: false };
+
+  // 行政類：總公司全部 + 各廠的行政課（WH 開頭，但排除生產類代碼）
+  // 一廠：WH4002~WH4003, WH400D~WH400G
+  if (['WH4002','WH4003','WH400D','WH400E','WH400F','WH400G'].includes(code))
+    return { cat: '生產類-一廠', name, isAdmin: false };
+
+  // 二廠：WH3101~WH3103（WH3100是行政課，歸行政類）
+  if (['WH3101','WH3102','WH3103'].includes(code))
+    return { cat: '生產類-二廠', name, isAdmin: false };
+
+  // 生技廠：WH3401~WH3403
+  if (['WH3401','WH3402','WH3403'].includes(code))
+    return { cat: '生產類-生技廠', name, isAdmin: false };
+
+  // 美德廠：WH3201~WH3203
+  if (['WH3201','WH3202','WH3203'].includes(code))
+    return { cat: '生產類-美德廠', name, isAdmin: false };
+
+  // 捷威廠：WH3301~WH3303
+  if (['WH3301','WH3302','WH3303'].includes(code))
+    return { cat: '生產類-捷威廠', name, isAdmin: false };
+
+  // 德暘廠紙類：WH3500~WH3503 + WH400A,B,C
+  if (['WH3500','WH3501','WH3502','WH3503','WH400A','WH400B','WH400C'].includes(code))
+    return { cat: '生產類-德暘廠紙類', name, isAdmin: false };
+
+  // 德暘廠塑膠類：WH5001~WH5003 + WH500A~D
+  if (['WH5001','WH5002','WH5003','WH500A','WH500B','WH500C','WH500D'].includes(code))
+    return { cat: '生產類-德暘廠塑膠類', name, isAdmin: false };
+
+  // 行政類：WH 開頭其他全部都是行政（包含 WH3100/WH3200/WH3300/WH3400/WH3500/WH4000/WH5000 等行政課和總公司各部）
+  if (/^WH/.test(code)) return { cat: '行政類', name, isAdmin: true };
+
   return { cat: '未分類', name, isAdmin: false };
 }
 
